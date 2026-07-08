@@ -1,0 +1,414 @@
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import { useState } from 'react';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+
+import { colors, typeLabels } from '@/constants/theme';
+import { useAuth } from '@/lib/AuthProvider';
+import { formatCurrency } from '@/lib/format';
+import { useAddCategory, useCategories, useDeleteCategory } from '@/lib/queries/useCategories';
+import { useAddDebt, useDebts, useDeleteDebt } from '@/lib/queries/useDebts';
+import { useWorkspace } from '@/lib/WorkspaceProvider';
+import { EntryType, WorkspaceType } from '@/types/database';
+
+const ENTRY_TYPES: EntryType[] = ['ingreso', 'gasto', 'ahorro'];
+
+export default function SettingsScreen() {
+  const { signOut } = useAuth();
+  const { workspaces, currentWorkspace, switchWorkspace, createWorkspace } = useWorkspace();
+  const categoriesQuery = useCategories(currentWorkspace?.id);
+  const addCategory = useAddCategory(currentWorkspace?.id);
+  const deleteCategory = useDeleteCategory(currentWorkspace?.id);
+  const debtsQuery = useDebts(currentWorkspace?.id);
+  const addDebt = useAddDebt(currentWorkspace?.id);
+  const deleteDebt = useDeleteDebt(currentWorkspace?.id);
+
+  const [newWorkspaceName, setNewWorkspaceName] = useState('');
+  const [newWorkspaceType, setNewWorkspaceType] = useState<WorkspaceType>('negocio');
+  const [creatingWorkspace, setCreatingWorkspace] = useState(false);
+
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [newCategoryType, setNewCategoryType] = useState<EntryType>('gasto');
+
+  const [newDebtName, setNewDebtName] = useState('');
+  const [newDebtBalance, setNewDebtBalance] = useState('');
+  const [newDebtRate, setNewDebtRate] = useState('');
+
+  async function handleCreateWorkspace() {
+    if (!newWorkspaceName.trim()) return;
+    setCreatingWorkspace(true);
+    try {
+      await createWorkspace(newWorkspaceName.trim(), newWorkspaceType);
+      setNewWorkspaceName('');
+    } catch (e: any) {
+      Alert.alert('Error', e.message ?? 'No se pudo crear el workspace');
+    } finally {
+      setCreatingWorkspace(false);
+    }
+  }
+
+  function handleAddCategory() {
+    if (!newCategoryName.trim()) return;
+    addCategory.mutate(
+      { name: newCategoryName.trim(), type: newCategoryType },
+      { onSuccess: () => setNewCategoryName('') }
+    );
+  }
+
+  function handleDeleteCategory(id: string, name: string) {
+    Alert.alert('Eliminar categoría', `¿Eliminar "${name}"?`, [
+      { text: 'Cancelar', style: 'cancel' },
+      { text: 'Eliminar', style: 'destructive', onPress: () => deleteCategory.mutate(id) },
+    ]);
+  }
+
+  function handleAddDebt() {
+    const balance = Number(newDebtBalance.replace(',', '.'));
+    const rate = Number(newDebtRate.replace(',', '.'));
+    if (!newDebtName.trim() || !(balance > 0) || Number.isNaN(rate)) return;
+    addDebt.mutate(
+      { name: newDebtName.trim(), balance, interestRate: rate },
+      {
+        onSuccess: () => {
+          setNewDebtName('');
+          setNewDebtBalance('');
+          setNewDebtRate('');
+        },
+      }
+    );
+  }
+
+  function handleDeleteDebt(id: string, name: string) {
+    Alert.alert('Eliminar deuda', `¿Eliminar "${name}"?`, [
+      { text: 'Cancelar', style: 'cancel' },
+      { text: 'Eliminar', style: 'destructive', onPress: () => deleteDebt.mutate(id) },
+    ]);
+  }
+
+  return (
+    <SafeAreaView style={styles.safeArea} edges={['top']}>
+      <ScrollView contentContainerStyle={styles.content}>
+        <Text style={styles.title}>Ajustes</Text>
+
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Tus workspaces</Text>
+          {workspaces.map((w) => (
+            <Pressable key={w.id} style={styles.workspaceRow} onPress={() => switchWorkspace(w.id)}>
+              <MaterialCommunityIcons
+                name={w.type === 'negocio' ? 'store' : 'account'}
+                size={20}
+                color={
+                  w.id === currentWorkspace?.id
+                    ? w.type === 'negocio'
+                      ? colors.secondary
+                      : colors.primary
+                    : colors.textMuted
+                }
+              />
+              <Text style={styles.workspaceName}>{w.name}</Text>
+              {w.id === currentWorkspace?.id && (
+                <MaterialCommunityIcons
+                  name="check"
+                  size={18}
+                  color={w.type === 'negocio' ? colors.secondary : colors.primary}
+                />
+              )}
+            </Pressable>
+          ))}
+
+          <View style={styles.divider} />
+          <Text style={styles.subLabel}>Crear nuevo workspace</Text>
+          <View style={styles.typeRow}>
+            {(['personal', 'negocio'] as WorkspaceType[]).map((t) => (
+              <Pressable
+                key={t}
+                style={[
+                  styles.typeChip,
+                  newWorkspaceType === t && {
+                    backgroundColor: t === 'negocio' ? colors.secondary : colors.primary,
+                    borderColor: t === 'negocio' ? colors.secondary : colors.primary,
+                  },
+                ]}
+                onPress={() => setNewWorkspaceType(t)}
+              >
+                <Text style={[styles.typeChipText, newWorkspaceType === t && styles.typeChipTextActive]}>
+                  {t === 'personal' ? 'Personal' : 'Negocio'}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+          <View style={styles.inlineForm}>
+            <TextInput
+              style={styles.input}
+              placeholder="Nombre (ej. Mi Pyme)"
+              value={newWorkspaceName}
+              onChangeText={setNewWorkspaceName}
+            />
+            <Pressable
+              style={[styles.addButton, (!newWorkspaceName.trim() || creatingWorkspace) && styles.addButtonDisabled]}
+              onPress={handleCreateWorkspace}
+              disabled={!newWorkspaceName.trim() || creatingWorkspace}
+            >
+              <MaterialCommunityIcons name="plus" size={20} color="#fff" />
+            </Pressable>
+          </View>
+        </View>
+
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Categorías</Text>
+          {ENTRY_TYPES.map((type) => {
+            const items = (categoriesQuery.data ?? []).filter((c) => c.type === type);
+            if (items.length === 0) return null;
+            return (
+              <View key={type} style={styles.categoryGroup}>
+                <Text style={[styles.categoryGroupTitle, { color: colors[type] }]}>{typeLabels[type]}</Text>
+                {items.map((cat) => (
+                  <View key={cat.id} style={styles.categoryRow}>
+                    <Text style={styles.categoryName}>{cat.name}</Text>
+                    <Pressable onPress={() => handleDeleteCategory(cat.id, cat.name)} hitSlop={10}>
+                      <MaterialCommunityIcons name="trash-can-outline" size={18} color={colors.textMuted} />
+                    </Pressable>
+                  </View>
+                ))}
+              </View>
+            );
+          })}
+
+          <View style={styles.divider} />
+          <Text style={styles.subLabel}>Agregar categoría</Text>
+          <View style={styles.typeRow}>
+            {ENTRY_TYPES.map((t) => (
+              <Pressable
+                key={t}
+                style={[styles.typeChip, newCategoryType === t && { backgroundColor: colors[t], borderColor: colors[t] }]}
+                onPress={() => setNewCategoryType(t)}
+              >
+                <Text style={[styles.typeChipText, newCategoryType === t && styles.typeChipTextActive]}>
+                  {typeLabels[t]}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+          <View style={styles.inlineForm}>
+            <TextInput
+              style={styles.input}
+              placeholder="Ej. Publicidad"
+              value={newCategoryName}
+              onChangeText={setNewCategoryName}
+            />
+            <Pressable
+              style={[styles.addButton, !newCategoryName.trim() && styles.addButtonDisabled]}
+              onPress={handleAddCategory}
+              disabled={!newCategoryName.trim()}
+            >
+              <MaterialCommunityIcons name="plus" size={20} color="#fff" />
+            </Pressable>
+          </View>
+        </View>
+
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Deudas y tarjetas</Text>
+          <Text style={styles.cardHint}>
+            Regístralas para que la pestaña Consejos te diga cuál te conviene pagar primero.
+          </Text>
+          {(debtsQuery.data ?? []).map((debt) => (
+            <View key={debt.id} style={styles.debtRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.categoryName}>{debt.name}</Text>
+                <Text style={styles.debtMeta}>
+                  {formatCurrency(debt.balance)} · {debt.interest_rate}% anual
+                </Text>
+              </View>
+              <Pressable onPress={() => handleDeleteDebt(debt.id, debt.name)} hitSlop={10}>
+                <MaterialCommunityIcons name="trash-can-outline" size={18} color={colors.textMuted} />
+              </Pressable>
+            </View>
+          ))}
+
+          <View style={styles.divider} />
+          <Text style={styles.subLabel}>Agregar deuda</Text>
+          <TextInput
+            style={[styles.input, { marginBottom: 8 }]}
+            placeholder="Nombre (ej. Tarjeta Visa)"
+            value={newDebtName}
+            onChangeText={setNewDebtName}
+          />
+          <View style={styles.inlineForm}>
+            <TextInput
+              style={styles.input}
+              placeholder="Saldo actual"
+              keyboardType="decimal-pad"
+              value={newDebtBalance}
+              onChangeText={setNewDebtBalance}
+            />
+            <TextInput
+              style={styles.input}
+              placeholder="Tasa % anual"
+              keyboardType="decimal-pad"
+              value={newDebtRate}
+              onChangeText={setNewDebtRate}
+            />
+            <Pressable
+              style={[styles.addButton, (!newDebtName.trim() || !newDebtBalance) && styles.addButtonDisabled]}
+              onPress={handleAddDebt}
+              disabled={!newDebtName.trim() || !newDebtBalance}
+            >
+              <MaterialCommunityIcons name="plus" size={20} color="#fff" />
+            </Pressable>
+          </View>
+        </View>
+
+        <Pressable style={styles.logoutButton} onPress={signOut}>
+          <MaterialCommunityIcons name="logout" size={18} color={colors.gasto} />
+          <Text style={styles.logoutText}>Cerrar sesión</Text>
+        </Pressable>
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  content: {
+    padding: 16,
+    gap: 16,
+    paddingBottom: 40,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  card: {
+    backgroundColor: colors.card,
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  cardTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.text,
+    marginBottom: 12,
+  },
+  cardHint: {
+    fontSize: 12,
+    color: colors.textMuted,
+    marginBottom: 12,
+    marginTop: -6,
+  },
+  debtRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+    gap: 8,
+  },
+  debtMeta: {
+    fontSize: 12,
+    color: colors.textMuted,
+    marginTop: 2,
+  },
+  workspaceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 10,
+  },
+  workspaceName: {
+    flex: 1,
+    fontSize: 15,
+    color: colors.text,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: colors.border,
+    marginVertical: 14,
+  },
+  subLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.textMuted,
+    marginBottom: 8,
+  },
+  typeRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 10,
+  },
+  typeChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  typeChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.textMuted,
+  },
+  typeChipTextActive: {
+    color: '#fff',
+  },
+  inlineForm: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  input: {
+    flex: 1,
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+  },
+  addButton: {
+    width: 42,
+    height: 42,
+    borderRadius: 10,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  addButtonDisabled: {
+    opacity: 0.5,
+  },
+  categoryGroup: {
+    marginBottom: 8,
+  },
+  categoryGroupTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    marginBottom: 4,
+    textTransform: 'uppercase',
+  },
+  categoryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+  },
+  categoryName: {
+    fontSize: 14,
+    color: colors.text,
+  },
+  logoutButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 14,
+  },
+  logoutText: {
+    color: colors.gasto,
+    fontSize: 15,
+    fontWeight: '600',
+  },
+});
