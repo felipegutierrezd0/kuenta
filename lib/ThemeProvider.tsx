@@ -19,7 +19,8 @@ const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
 
 export function ThemeProvider({ children }: PropsWithChildren) {
   const systemScheme = useColorScheme();
-  const [mode, setModeState] = useState<ThemeMode>('system');
+  // Por defecto claro para quienes recién entran; el usuario puede cambiarlo a Oscuro/Sistema en Ajustes.
+  const [mode, setModeState] = useState<ThemeMode>('light');
 
   useEffect(() => {
     AsyncStorage.getItem(THEME_MODE_KEY).then((stored) => {

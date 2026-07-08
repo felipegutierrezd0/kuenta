@@ -41,7 +41,8 @@ export default function LoginScreen() {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <Image source={require('@/assets/images/logo-full.png')} style={styles.logo} resizeMode="contain" />
+      <Image source={require('@/assets/images/logo-icon.png')} style={styles.logo} resizeMode="contain" />
+      <Text style={styles.wordmark}>KUENTA</Text>
       <Text style={styles.title}>Bienvenido de vuelta</Text>
       <Text style={styles.subtitle}>Controla tus ingresos, gastos y ahorros</Text>
 
@@ -94,10 +95,17 @@ const getStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: colors.background,
   },
   logo: {
-    width: 150,
-    height: 184,
+    width: 120,
+    height: 125,
     alignSelf: 'center',
-    marginBottom: 4,
+  },
+  wordmark: {
+    fontSize: 26,
+    fontWeight: '700',
+    color: colors.text,
+    textAlign: 'center',
+    letterSpacing: 4,
+    marginBottom: 8,
   },
   title: {
     fontSize: 26,
