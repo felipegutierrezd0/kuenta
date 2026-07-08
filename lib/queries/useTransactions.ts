@@ -21,7 +21,7 @@ export function useTransactions({ workspaceId, monthStart, monthEnd, type }: Tra
       if (isDemoMode) return mockStore.getTransactionsInRange(workspaceId!, monthStart, monthEnd, type);
       let query = supabase
         .from('transactions')
-        .select('*, category:categories(*)')
+        .select('*, category:categories(*), account:accounts(*)')
         .eq('workspace_id', workspaceId)
         .gte('occurred_on', monthStart)
         .lte('occurred_on', monthEnd)
@@ -35,11 +35,30 @@ export function useTransactions({ workspaceId, monthStart, monthEnd, type }: Tra
   });
 }
 
+export function useAllTransactions(workspaceId: string | undefined) {
+  return useQuery({
+    queryKey: ['all-transactions', workspaceId],
+    enabled: !!workspaceId,
+    queryFn: async () => {
+      if (isDemoMode) return mockStore.getAllTransactions(workspaceId!);
+      const { data, error } = await supabase
+        .from('transactions')
+        .select('*, category:categories(*), account:accounts(*)')
+        .eq('workspace_id', workspaceId)
+        .order('occurred_on', { ascending: false })
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return data as Transaction[];
+    },
+  });
+}
+
 interface NewTransaction {
   workspaceId: string;
   type: EntryType;
   amount: number;
   categoryId: string | null;
+  accountId?: string | null;
   note: string | null;
   occurredOn: string;
 }
@@ -49,6 +68,7 @@ function invalidateWorkspaceData(queryClient: ReturnType<typeof useQueryClient>,
   queryClient.invalidateQueries({ queryKey: ['monthly-summary', workspaceId] });
   queryClient.invalidateQueries({ queryKey: ['category-breakdown', workspaceId] });
   queryClient.invalidateQueries({ queryKey: ['monthly-trend', workspaceId] });
+  queryClient.invalidateQueries({ queryKey: ['account-balances', workspaceId] });
 }
 
 export function useAddTransaction() {
@@ -68,6 +88,7 @@ export function useAddTransaction() {
         type: input.type,
         amount: input.amount,
         category_id: input.categoryId,
+        account_id: input.accountId ?? null,
         note: input.note,
         occurred_on: input.occurredOn,
       });

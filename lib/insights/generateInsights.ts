@@ -1,13 +1,15 @@
 import { formatCurrency } from '@/lib/format';
 import {
   buildMonthContext,
+  computeBudgetOverrun,
   computeCashRunway,
   computeCategoryOverrun,
   computeDebtPriority,
   computeDiscretionarySavings,
+  computeGoalsOffTrack,
   computeInvestmentCapacity,
 } from '@/lib/insights/metrics';
-import { Debt, Transaction } from '@/types/database';
+import { Budget, Debt, SavingsGoal, Transaction } from '@/types/database';
 
 export type InsightTone = 'danger' | 'warning' | 'success' | 'info';
 
@@ -20,13 +22,30 @@ export interface Insight {
 
 const MAX_RUNWAY_DAYS_TO_WARN = 90;
 
-export function generateInsights(transactions: Transaction[], debts: Debt[], today: Date = new Date()): Insight[] {
+export function generateInsights(
+  transactions: Transaction[],
+  debts: Debt[],
+  today: Date = new Date(),
+  budgets: Budget[] = [],
+  savingsGoals: SavingsGoal[] = []
+): Insight[] {
   const insights: Insight[] = [];
   const ctx = buildMonthContext(transactions, today);
 
-  // 1) Categoría de gasto por encima de lo habitual.
+  // 1) Presupuesto definido por el usuario que se va a superar (más preciso que el promedio histórico).
+  const budgetOverrun = computeBudgetOverrun(ctx, budgets);
+  if (budgetOverrun) {
+    insights.push({
+      id: 'budget-overrun',
+      tone: budgetOverrun.pct > 25 ? 'danger' : 'warning',
+      icon: 'wallet-outline',
+      message: `Al ritmo actual, vas a cerrar el mes ${Math.round(budgetOverrun.pct)}% por encima de tu presupuesto de ${budgetOverrun.categoryName.toLowerCase()} (${formatCurrency(budgetOverrun.limit)}).`,
+    });
+  }
+
+  // 2) Categoría de gasto por encima de lo habitual (solo si no tiene presupuesto propio, para no duplicar la alerta).
   const overrun = computeCategoryOverrun(ctx);
-  if (overrun) {
+  if (overrun && overrun.name !== budgetOverrun?.categoryName) {
     insights.push({
       id: 'category-overrun',
       tone: 'warning',
@@ -96,6 +115,17 @@ export function generateInsights(transactions: Transaction[], debts: Debt[], tod
       tone: 'success',
       icon: 'chart-line',
       message: `Con tu flujo de caja promedio de los últimos meses, podrías destinar unos ${formatCurrency(investable)} a inversión sin afectar tu día a día.`,
+    });
+  }
+
+  // 6) Metas de ahorro atrasadas respecto a su fecha objetivo.
+  const offTrackGoals = computeGoalsOffTrack(savingsGoals, today);
+  for (const goal of offTrackGoals) {
+    insights.push({
+      id: `goal-off-track-${goal.id}`,
+      tone: 'warning',
+      icon: 'flag-outline',
+      message: `Tu meta "${goal.name}" va más lenta de lo necesario para llegar a tiempo. Llevas ${formatCurrency(goal.saved_amount)} de ${formatCurrency(goal.target_amount)}.`,
     });
   }
 

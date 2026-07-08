@@ -3,22 +3,27 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from
 import { BarChart, PieChart } from 'react-native-gifted-charts';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { colors, typeLabels } from '@/constants/theme';
+import { ThemeColors, typeLabels } from '@/constants/theme';
 import { monthRange } from '@/lib/dateRange';
 import { formatCurrency } from '@/lib/format';
-import { useCategoryBreakdown, useMonthlyTrend } from '@/lib/queries/useReports';
+import { useCashflowForecast, useCategoryBreakdown, useFixedVsVariable, useMonthlyTrend } from '@/lib/queries/useReports';
+import { useColors } from '@/lib/ThemeProvider';
 import { useWorkspace } from '@/lib/WorkspaceProvider';
 import { EntryType } from '@/types/database';
 
 const BREAKDOWN_TYPES: EntryType[] = ['gasto', 'ingreso', 'ahorro'];
 
 export default function ReportsScreen() {
+  const colors = useColors();
+  const styles = useMemo(() => getStyles(colors), [colors]);
   const { currentWorkspace } = useWorkspace();
   const [breakdownType, setBreakdownType] = useState<EntryType>('gasto');
   const { start, end } = useMemo(() => monthRange(new Date()), []);
 
   const breakdownQuery = useCategoryBreakdown(currentWorkspace?.id, start, end, breakdownType);
   const trendQuery = useMonthlyTrend(currentWorkspace?.id, 6);
+  const fixedVsVariableQuery = useFixedVsVariable(currentWorkspace?.id);
+  const forecastQuery = useCashflowForecast(currentWorkspace?.id);
 
   const pieData = (breakdownQuery.data ?? []).map((item) => ({
     value: item.total,
@@ -110,12 +115,75 @@ export default function ReportsScreen() {
             />
           )}
         </View>
+
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Gastos fijos vs. variables</Text>
+          <Text style={styles.cardHint}>
+            Fijo = categorías con un movimiento recurrente activo (ej. renta, suscripciones). Variable = el resto.
+          </Text>
+          {fixedVsVariableQuery.isLoading ? (
+            <ActivityIndicator color={colors.primary} style={{ marginVertical: 24 }} />
+          ) : (
+            (() => {
+              const fixed = fixedVsVariableQuery.data?.fixed ?? 0;
+              const variable = fixedVsVariableQuery.data?.variable ?? 0;
+              const total = fixed + variable;
+              const fixedPct = total > 0 ? Math.round((fixed / total) * 100) : 0;
+              return (
+                <>
+                  <View style={styles.stackedBar}>
+                    {total > 0 && <View style={[styles.stackedFixed, { flex: fixed }]} />}
+                    {total > 0 && <View style={[styles.stackedVariable, { flex: variable || 1 }]} />}
+                  </View>
+                  <View style={styles.legend}>
+                    <View style={styles.legendRow}>
+                      <View style={[styles.legendDot, { backgroundColor: colors.primary }]} />
+                      <Text style={styles.legendLabel}>Fijo</Text>
+                      <Text style={styles.legendValue}>{formatCurrency(fixed)}</Text>
+                      <Text style={styles.legendPercent}>{fixedPct}%</Text>
+                    </View>
+                    <View style={styles.legendRow}>
+                      <View style={[styles.legendDot, { backgroundColor: colors.textMuted }]} />
+                      <Text style={styles.legendLabel}>Variable</Text>
+                      <Text style={styles.legendValue}>{formatCurrency(variable)}</Text>
+                      <Text style={styles.legendPercent}>{100 - fixedPct}%</Text>
+                    </View>
+                  </View>
+                </>
+              );
+            })()
+          )}
+        </View>
+
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Proyección de flujo de caja</Text>
+          <Text style={styles.cardHint}>
+            Saldo estimado combinando tu tendencia histórica y tus movimientos recurrentes conocidos. Es una guía, no una
+            garantía.
+          </Text>
+          {forecastQuery.isLoading ? (
+            <ActivityIndicator color={colors.primary} style={{ marginVertical: 24 }} />
+          ) : (
+            <View style={styles.forecastRow}>
+              {forecastQuery.data.map((point) => (
+                <View key={point.daysAhead} style={styles.forecastItem}>
+                  <Text style={styles.forecastDays}>{point.daysAhead} días</Text>
+                  <Text style={[styles.forecastValue, { color: point.projectedBalance >= 0 ? colors.ingreso : colors.gasto }]}>
+                    {formatCurrency(point.projectedBalance)}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          )}
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
 function LegendDot({ color, label }: { color: string; label: string }) {
+  const colors = useColors();
+  const styles = useMemo(() => getStyles(colors), [colors]);
   return (
     <View style={styles.legendRow}>
       <View style={[styles.legendDot, { backgroundColor: color }]} />
@@ -124,7 +192,7 @@ function LegendDot({ color, label }: { color: string; label: string }) {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors: ThemeColors) => StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: colors.background,
@@ -211,5 +279,42 @@ const styles = StyleSheet.create({
     fontSize: 13,
     textAlign: 'center',
     marginVertical: 24,
+  },
+  cardHint: {
+    fontSize: 12,
+    color: colors.textMuted,
+    marginBottom: 14,
+    marginTop: -6,
+  },
+  stackedBar: {
+    flexDirection: 'row',
+    height: 14,
+    borderRadius: 999,
+    overflow: 'hidden',
+    backgroundColor: colors.border,
+    marginBottom: 12,
+  },
+  stackedFixed: {
+    backgroundColor: colors.primary,
+  },
+  stackedVariable: {
+    backgroundColor: colors.textMuted,
+  },
+  forecastRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  forecastItem: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  forecastDays: {
+    fontSize: 12,
+    color: colors.textMuted,
+    marginBottom: 4,
+  },
+  forecastValue: {
+    fontSize: 15,
+    fontWeight: '700',
   },
 });

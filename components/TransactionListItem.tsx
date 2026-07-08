@@ -1,10 +1,12 @@
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
-import { colors } from '@/constants/theme';
+import { ThemeColors } from '@/constants/theme';
 import { formatCurrency } from '@/lib/format';
+import { useColors } from '@/lib/ThemeProvider';
 import { Transaction } from '@/types/database';
 
 const SIGN: Record<Transaction['type'], string> = {
@@ -14,6 +16,8 @@ const SIGN: Record<Transaction['type'], string> = {
 };
 
 export function TransactionListItem({ transaction }: { transaction: Transaction }) {
+  const colors = useColors();
+  const styles = useMemo(() => getStyles(colors), [colors]);
   const color = colors[transaction.type];
   const iconName = (transaction.category?.icon as keyof typeof MaterialCommunityIcons.glyphMap) ?? 'circle-outline';
 
@@ -37,7 +41,7 @@ export function TransactionListItem({ transaction }: { transaction: Transaction 
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors: ThemeColors) => StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',

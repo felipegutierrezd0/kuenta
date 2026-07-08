@@ -1,19 +1,53 @@
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import { useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { router } from 'expo-router';
+import { useMemo, useState } from 'react';
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { colors, typeLabels } from '@/constants/theme';
+import { ThemeColors, typeLabels } from '@/constants/theme';
 import { useAuth } from '@/lib/AuthProvider';
+import { exportTransactionsCsv } from '@/lib/export';
 import { formatCurrency } from '@/lib/format';
 import { useAddCategory, useCategories, useDeleteCategory } from '@/lib/queries/useCategories';
 import { useAddDebt, useDebts, useDeleteDebt } from '@/lib/queries/useDebts';
+import { useAllTransactions } from '@/lib/queries/useTransactions';
+import { useColors, useTheme, ThemeMode } from '@/lib/ThemeProvider';
 import { useWorkspace } from '@/lib/WorkspaceProvider';
 import { EntryType, WorkspaceType } from '@/types/database';
 
 const ENTRY_TYPES: EntryType[] = ['ingreso', 'gasto', 'ahorro'];
 
+const APPEARANCE_OPTIONS: { value: ThemeMode; label: string }[] = [
+  { value: 'light', label: 'Claro' },
+  { value: 'dark', label: 'Oscuro' },
+  { value: 'system', label: 'Sistema' },
+];
+
+function NavRow({
+  icon,
+  label,
+  onPress,
+  colors,
+  styles,
+}: {
+  icon: keyof typeof MaterialCommunityIcons.glyphMap;
+  label: string;
+  onPress: () => void;
+  colors: ThemeColors;
+  styles: ReturnType<typeof getStyles>;
+}) {
+  return (
+    <Pressable style={styles.navRow} onPress={onPress}>
+      <MaterialCommunityIcons name={icon} size={20} color={colors.primary} />
+      <Text style={styles.navRowLabel}>{label}</Text>
+      <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textMuted} />
+    </Pressable>
+  );
+}
+
 export default function SettingsScreen() {
+  const colors = useColors();
+  const styles = useMemo(() => getStyles(colors), [colors]);
   const { signOut } = useAuth();
   const { workspaces, currentWorkspace, switchWorkspace, createWorkspace } = useWorkspace();
   const categoriesQuery = useCategories(currentWorkspace?.id);
@@ -22,6 +56,22 @@ export default function SettingsScreen() {
   const debtsQuery = useDebts(currentWorkspace?.id);
   const addDebt = useAddDebt(currentWorkspace?.id);
   const deleteDebt = useDeleteDebt(currentWorkspace?.id);
+  const { mode, setMode } = useTheme();
+  const allTransactionsQuery = useAllTransactions(currentWorkspace?.id);
+  const [exporting, setExporting] = useState(false);
+
+  const isNegocio = currentWorkspace?.type === 'negocio';
+
+  async function handleExport() {
+    setExporting(true);
+    try {
+      await exportTransactionsCsv(allTransactionsQuery.data ?? []);
+    } catch (e: any) {
+      Alert.alert('Error', e.message ?? 'No se pudo exportar');
+    } finally {
+      setExporting(false);
+    }
+  }
 
   const [newWorkspaceName, setNewWorkspaceName] = useState('');
   const [newWorkspaceType, setNewWorkspaceType] = useState<WorkspaceType>('negocio');
@@ -141,6 +191,7 @@ export default function SettingsScreen() {
             <TextInput
               style={styles.input}
               placeholder="Nombre (ej. Mi Pyme)"
+              placeholderTextColor={colors.textMuted}
               value={newWorkspaceName}
               onChangeText={setNewWorkspaceName}
             />
@@ -151,6 +202,40 @@ export default function SettingsScreen() {
             >
               <MaterialCommunityIcons name="plus" size={20} color="#fff" />
             </Pressable>
+          </View>
+        </View>
+
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Herramientas</Text>
+          <NavRow icon="bank-outline" label="Cuentas" onPress={() => router.push('/(app)/accounts')} colors={colors} styles={styles} />
+          <NavRow icon="wallet-outline" label="Presupuestos" onPress={() => router.push('/(app)/budgets')} colors={colors} styles={styles} />
+          <NavRow icon="flag-outline" label="Metas de ahorro" onPress={() => router.push('/(app)/goals')} colors={colors} styles={styles} />
+          <NavRow icon="calendar-sync-outline" label="Recurrentes" onPress={() => router.push('/(app)/recurring')} colors={colors} styles={styles} />
+          {isNegocio && (
+            <NavRow icon="handshake-outline" label="Cobros y pagos" onPress={() => router.push('/(app)/receivables')} colors={colors} styles={styles} />
+          )}
+          {isNegocio && (
+            <NavRow icon="account-multiple-outline" label="Miembros" onPress={() => router.push('/(app)/members')} colors={colors} styles={styles} />
+          )}
+
+          <Pressable style={styles.navRow} onPress={handleExport} disabled={exporting}>
+            <MaterialCommunityIcons name="file-export-outline" size={20} color={colors.primary} />
+            <Text style={styles.navRowLabel}>Exportar movimientos (CSV)</Text>
+            {exporting ? <ActivityIndicator size="small" color={colors.primary} /> : <View style={{ width: 20 }} />}
+          </Pressable>
+
+          <View style={styles.divider} />
+          <Text style={styles.subLabel}>Apariencia</Text>
+          <View style={styles.typeRow}>
+            {APPEARANCE_OPTIONS.map((opt) => (
+              <Pressable
+                key={opt.value}
+                style={[styles.typeChip, mode === opt.value && { backgroundColor: colors.primary, borderColor: colors.primary }]}
+                onPress={() => setMode(opt.value)}
+              >
+                <Text style={[styles.typeChipText, mode === opt.value && styles.typeChipTextActive]}>{opt.label}</Text>
+              </Pressable>
+            ))}
           </View>
         </View>
 
@@ -193,6 +278,7 @@ export default function SettingsScreen() {
             <TextInput
               style={styles.input}
               placeholder="Ej. Publicidad"
+              placeholderTextColor={colors.textMuted}
               value={newCategoryName}
               onChangeText={setNewCategoryName}
             />
@@ -230,6 +316,7 @@ export default function SettingsScreen() {
           <TextInput
             style={[styles.input, { marginBottom: 8 }]}
             placeholder="Nombre (ej. Tarjeta Visa)"
+            placeholderTextColor={colors.textMuted}
             value={newDebtName}
             onChangeText={setNewDebtName}
           />
@@ -237,6 +324,7 @@ export default function SettingsScreen() {
             <TextInput
               style={styles.input}
               placeholder="Saldo actual"
+              placeholderTextColor={colors.textMuted}
               keyboardType="decimal-pad"
               value={newDebtBalance}
               onChangeText={setNewDebtBalance}
@@ -244,6 +332,7 @@ export default function SettingsScreen() {
             <TextInput
               style={styles.input}
               placeholder="Tasa % anual"
+              placeholderTextColor={colors.textMuted}
               keyboardType="decimal-pad"
               value={newDebtRate}
               onChangeText={setNewDebtRate}
@@ -267,7 +356,7 @@ export default function SettingsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors: ThemeColors) => StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: colors.background,
@@ -368,6 +457,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 14,
+    color: colors.text,
   },
   addButton: {
     width: 42,
@@ -410,5 +500,17 @@ const styles = StyleSheet.create({
     color: colors.gasto,
     fontSize: 15,
     fontWeight: '600',
+  },
+  navRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 12,
+  },
+  navRowLabel: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.text,
   },
 });

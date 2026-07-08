@@ -1,6 +1,6 @@
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { router } from 'expo-router';
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import {
   FlatList,
   KeyboardAvoidingView,
@@ -13,9 +13,10 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { colors } from '@/constants/theme';
+import { ThemeColors } from '@/constants/theme';
 import { answerQuestion, FALLBACK_MESSAGE } from '@/lib/chat/answerQuestion';
 import { useFinancialData } from '@/lib/queries/useFinancialData';
+import { useColors } from '@/lib/ThemeProvider';
 import { useWorkspace } from '@/lib/WorkspaceProvider';
 
 interface ChatMessage {
@@ -34,6 +35,8 @@ const SUGGESTED_QUESTIONS = [
 let nextId = 1;
 
 export default function ChatScreen() {
+  const colors = useColors();
+  const styles = useMemo(() => getStyles(colors), [colors]);
   const { currentWorkspace } = useWorkspace();
   const { today, transactionsQuery, debtsQuery } = useFinancialData(currentWorkspace?.id);
   const listRef = useRef<FlatList>(null);
@@ -103,6 +106,7 @@ export default function ChatScreen() {
           <TextInput
             style={styles.input}
             placeholder="Escribe tu pregunta..."
+            placeholderTextColor={colors.textMuted}
             value={input}
             onChangeText={setInput}
             onSubmitEditing={() => send(input)}
@@ -122,6 +126,8 @@ export default function ChatScreen() {
 }
 
 function MessageBubble({ message }: { message: ChatMessage }) {
+  const colors = useColors();
+  const styles = useMemo(() => getStyles(colors), [colors]);
   const isUser = message.role === 'user';
   return (
     <View style={[styles.bubbleRow, isUser && styles.bubbleRowUser]}>
@@ -137,7 +143,7 @@ function MessageBubble({ message }: { message: ChatMessage }) {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors: ThemeColors) => StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: colors.background,
@@ -241,6 +247,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 10,
     fontSize: 14,
+    color: colors.text,
   },
   sendButton: {
     width: 42,

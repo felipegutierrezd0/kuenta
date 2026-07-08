@@ -1,7 +1,18 @@
-import { addDays, format, getDate, getDaysInMonth, startOfMonth, subMonths } from 'date-fns';
+import { addDays, format, getDate, getDaysInMonth, startOfMonth, subDays, subMonths } from 'date-fns';
 
 import { DEMO_USER_ID } from '@/lib/config';
-import { Category, Debt, EntryType, Transaction, Workspace } from '@/types/database';
+import {
+  Account,
+  Budget,
+  Category,
+  Debt,
+  EntryType,
+  Receivable,
+  RecurringTransaction,
+  SavingsGoal,
+  Transaction,
+  Workspace,
+} from '@/types/database';
 
 let idCounter = 0;
 function nextId(prefix: string) {
@@ -60,6 +71,7 @@ function buildTransactions(workspaceId: string, monthsBack: number, scale: numbe
       user_id: DEMO_USER_ID,
       category_id: category.id,
       category,
+      account_id: null,
       type,
       amount: Math.round(amount * scale),
       note: note ?? null,
@@ -119,6 +131,140 @@ export const seedDebts: Debt[] = [
   { id: 'debt-3', workspace_id: 'ws-personal', name: 'Crédito de libre inversión', balance: 3200000, interest_rate: 19.4, created_at: new Date().toISOString() },
   { id: 'debt-4', workspace_id: 'ws-negocio', name: 'Tarjeta empresarial', balance: 4500000, interest_rate: 34.2, created_at: new Date().toISOString() },
   { id: 'debt-5', workspace_id: 'ws-negocio', name: 'Préstamo de capital de trabajo', balance: 12000000, interest_rate: 22.1, created_at: new Date().toISOString() },
+];
+
+export const seedAccounts: Account[] = [
+  { id: 'acc-1', workspace_id: 'ws-personal', name: 'Cuenta principal', kind: 'banco', initial_balance: 500, created_at: new Date().toISOString() },
+  { id: 'acc-2', workspace_id: 'ws-personal', name: 'Efectivo', kind: 'efectivo', initial_balance: 80, created_at: new Date().toISOString() },
+  { id: 'acc-3', workspace_id: 'ws-negocio', name: 'Cuenta empresarial', kind: 'banco', initial_balance: 2500, created_at: new Date().toISOString() },
+  { id: 'acc-4', workspace_id: 'ws-negocio', name: 'Caja', kind: 'efectivo', initial_balance: 300, created_at: new Date().toISOString() },
+];
+
+export const seedBudgets: Budget[] = [
+  { id: 'budget-1', workspace_id: 'ws-personal', category_id: categoryFor('ws-personal', 'Comida').id, monthly_limit: 150, created_at: new Date().toISOString() },
+  { id: 'budget-2', workspace_id: 'ws-personal', category_id: categoryFor('ws-personal', 'Transporte').id, monthly_limit: 100, created_at: new Date().toISOString() },
+  { id: 'budget-3', workspace_id: 'ws-personal', category_id: categoryFor('ws-personal', 'Servicios').id, monthly_limit: 130, created_at: new Date().toISOString() },
+  { id: 'budget-4', workspace_id: 'ws-negocio', category_id: categoryFor('ws-negocio', 'Comida').id, monthly_limit: 400, created_at: new Date().toISOString() },
+  { id: 'budget-5', workspace_id: 'ws-negocio', category_id: categoryFor('ws-negocio', 'Servicios').id, monthly_limit: 500, created_at: new Date().toISOString() },
+];
+
+export const seedSavingsGoals: SavingsGoal[] = [
+  {
+    id: 'goal-1',
+    workspace_id: 'ws-personal',
+    name: 'Fondo de emergencia',
+    target_amount: 3000,
+    target_date: format(addDays(new Date(), 180), 'yyyy-MM-dd'),
+    saved_amount: 1200,
+    created_at: new Date().toISOString(),
+  },
+  {
+    id: 'goal-2',
+    workspace_id: 'ws-negocio',
+    name: 'Comprar equipo nuevo',
+    target_amount: 8000,
+    target_date: format(addDays(new Date(), 90), 'yyyy-MM-dd'),
+    saved_amount: 2000,
+    created_at: new Date().toISOString(),
+  },
+];
+
+export const seedRecurringTransactions: RecurringTransaction[] = [
+  {
+    id: 'rec-1',
+    workspace_id: 'ws-personal',
+    category_id: categoryFor('ws-personal', 'Renta').id,
+    category: categoryFor('ws-personal', 'Renta'),
+    type: 'gasto',
+    amount: 450,
+    note: 'Renta mensual',
+    frequency: 'mensual',
+    next_due_date: format(new Date(), 'yyyy-MM-dd'),
+    active: true,
+    created_at: new Date().toISOString(),
+  },
+  {
+    id: 'rec-2',
+    workspace_id: 'ws-personal',
+    category_id: categoryFor('ws-personal', 'Salario').id,
+    category: categoryFor('ws-personal', 'Salario'),
+    type: 'ingreso',
+    amount: 1350,
+    note: 'Nómina',
+    frequency: 'mensual',
+    next_due_date: format(addDays(new Date(), 12), 'yyyy-MM-dd'),
+    active: true,
+    created_at: new Date().toISOString(),
+  },
+  {
+    id: 'rec-3',
+    workspace_id: 'ws-negocio',
+    category_id: categoryFor('ws-negocio', 'Renta').id,
+    category: categoryFor('ws-negocio', 'Renta'),
+    type: 'gasto',
+    amount: 1800,
+    note: 'Renta del local',
+    frequency: 'mensual',
+    next_due_date: format(new Date(), 'yyyy-MM-dd'),
+    active: true,
+    created_at: new Date().toISOString(),
+  },
+  {
+    id: 'rec-4',
+    workspace_id: 'ws-negocio',
+    category_id: categoryFor('ws-negocio', 'Otros gastos').id,
+    category: categoryFor('ws-negocio', 'Otros gastos'),
+    type: 'gasto',
+    amount: 900,
+    note: 'Nómina empleados',
+    frequency: 'quincenal',
+    next_due_date: format(addDays(new Date(), 3), 'yyyy-MM-dd'),
+    active: true,
+    created_at: new Date().toISOString(),
+  },
+];
+
+export const seedReceivables: Receivable[] = [
+  {
+    id: 'recv-1',
+    workspace_id: 'ws-negocio',
+    direction: 'cobrar',
+    counterparty: 'Cliente ABC',
+    amount: 2500,
+    due_date: format(addDays(new Date(), 5), 'yyyy-MM-dd'),
+    status: 'pendiente',
+    created_at: new Date().toISOString(),
+  },
+  {
+    id: 'recv-2',
+    workspace_id: 'ws-negocio',
+    direction: 'cobrar',
+    counterparty: 'Cliente XYZ',
+    amount: 900,
+    due_date: format(subDays(new Date(), 10), 'yyyy-MM-dd'),
+    status: 'pendiente',
+    created_at: new Date().toISOString(),
+  },
+  {
+    id: 'recv-3',
+    workspace_id: 'ws-negocio',
+    direction: 'pagar',
+    counterparty: 'Proveedor de insumos',
+    amount: 1200,
+    due_date: format(addDays(new Date(), 3), 'yyyy-MM-dd'),
+    status: 'pendiente',
+    created_at: new Date().toISOString(),
+  },
+  {
+    id: 'recv-4',
+    workspace_id: 'ws-negocio',
+    direction: 'pagar',
+    counterparty: 'Contador',
+    amount: 300,
+    due_date: format(subDays(new Date(), 20), 'yyyy-MM-dd'),
+    status: 'pagado',
+    created_at: new Date().toISOString(),
+  },
 ];
 
 export { nextId };

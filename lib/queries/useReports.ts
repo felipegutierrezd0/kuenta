@@ -1,8 +1,12 @@
 import { useQuery } from '@tanstack/react-query';
 import { format, startOfMonth, endOfMonth, subMonths } from 'date-fns';
+import { useMemo } from 'react';
 
 import { isDemoMode } from '@/lib/config';
+import { buildMonthContext, computeCashflowForecast, computeFixedVsVariable } from '@/lib/insights/metrics';
 import { mockStore } from '@/lib/mock/store';
+import { useRecurringTransactions } from '@/lib/queries/useRecurringTransactions';
+import { useAllTransactions } from '@/lib/queries/useTransactions';
 import { supabase } from '@/lib/supabase';
 import { EntryType } from '@/types/database';
 
@@ -130,4 +134,29 @@ async function fetchTrendFromSupabase(workspaceId: string, startStr: string, end
     .lte('occurred_on', endStr);
   if (error) throw error;
   return data ?? [];
+}
+
+export function useCashflowForecast(workspaceId: string | undefined) {
+  const transactionsQuery = useAllTransactions(workspaceId);
+  const recurringQuery = useRecurringTransactions(workspaceId);
+
+  const forecast = useMemo(() => {
+    if (!transactionsQuery.data) return [];
+    return computeCashflowForecast(transactionsQuery.data, recurringQuery.data ?? [], new Date());
+  }, [transactionsQuery.data, recurringQuery.data]);
+
+  return { data: forecast, isLoading: transactionsQuery.isLoading || recurringQuery.isLoading };
+}
+
+export function useFixedVsVariable(workspaceId: string | undefined) {
+  const transactionsQuery = useAllTransactions(workspaceId);
+  const recurringQuery = useRecurringTransactions(workspaceId);
+
+  const result = useMemo(() => {
+    if (!transactionsQuery.data) return null;
+    const ctx = buildMonthContext(transactionsQuery.data, new Date());
+    return computeFixedVsVariable(ctx, recurringQuery.data ?? []);
+  }, [transactionsQuery.data, recurringQuery.data]);
+
+  return { data: result, isLoading: transactionsQuery.isLoading || recurringQuery.isLoading };
 }

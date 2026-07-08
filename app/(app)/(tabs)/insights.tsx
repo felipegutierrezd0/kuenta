@@ -1,12 +1,16 @@
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { router } from 'expo-router';
+import { useMemo } from 'react';
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { colors, toneColors } from '@/constants/theme';
+import { HealthScoreCard } from '@/components/HealthScoreCard';
+import { getToneColors, ThemeColors } from '@/constants/theme';
 import { useAuth } from '@/lib/AuthProvider';
 import { Insight } from '@/lib/insights/generateInsights';
+import { useFinancialHealth } from '@/lib/queries/useFinancialHealth';
 import { useInsights } from '@/lib/queries/useInsights';
+import { useColors } from '@/lib/ThemeProvider';
 import { useWorkspace } from '@/lib/WorkspaceProvider';
 
 function displayName(email: string | undefined) {
@@ -17,9 +21,12 @@ function displayName(email: string | undefined) {
 }
 
 export default function InsightsScreen() {
+  const colors = useColors();
+  const styles = useMemo(() => getStyles(colors), [colors]);
   const { session } = useAuth();
   const { currentWorkspace } = useWorkspace();
   const { insights, isLoading, isFetching, refetch } = useInsights(currentWorkspace?.id);
+  const { health } = useFinancialHealth(currentWorkspace?.id);
   const name = displayName(session?.user.email);
 
   return (
@@ -32,6 +39,8 @@ export default function InsightsScreen() {
         <Text style={styles.subtitle}>
           Análisis automático de tus ingresos, gastos y deudas en {currentWorkspace?.name ?? 'este workspace'}.
         </Text>
+
+        {health && <HealthScoreCard health={health} />}
 
         <Pressable style={styles.chatButton} onPress={() => router.push('/(app)/chat')}>
           <MaterialCommunityIcons name="chat-question-outline" size={20} color="#fff" />
@@ -64,6 +73,9 @@ export default function InsightsScreen() {
 }
 
 function InsightCard({ insight, greeting }: { insight: Insight; greeting?: string | null }) {
+  const colors = useColors();
+  const styles = useMemo(() => getStyles(colors), [colors]);
+  const toneColors = useMemo(() => getToneColors(colors), [colors]);
   const tone = toneColors[insight.tone];
   return (
     <View style={[styles.card, { borderLeftColor: tone.fg }]}>
@@ -78,7 +90,7 @@ function InsightCard({ insight, greeting }: { insight: Insight; greeting?: strin
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors: ThemeColors) => StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: colors.background,

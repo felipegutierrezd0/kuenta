@@ -1,10 +1,14 @@
+import { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
-import { colors } from '@/constants/theme';
+import { ThemeColors } from '@/constants/theme';
 import { formatCurrency } from '@/lib/format';
+import { useColors } from '@/lib/ThemeProvider';
 import { MonthlySummary } from '@/types/database';
 
 export function MonthlySummaryCard({ summary, monthLabel }: { summary: MonthlySummary; monthLabel: string }) {
+  const colors = useColors();
+  const styles = useMemo(() => getStyles(colors), [colors]);
   return (
     <View style={styles.card}>
       <Text style={styles.month}>{monthLabel}</Text>
@@ -23,6 +27,8 @@ export function MonthlySummaryCard({ summary, monthLabel }: { summary: MonthlySu
 }
 
 function SummaryStat({ label, value, color }: { label: string; value: number; color: string }) {
+  const colors = useColors();
+  const styles = useMemo(() => getStyles(colors), [colors]);
   return (
     <View style={styles.stat}>
       <Text style={styles.statLabel}>{label}</Text>
@@ -31,7 +37,7 @@ function SummaryStat({ label, value, color }: { label: string; value: number; co
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors: ThemeColors) => StyleSheet.create({
   card: {
     backgroundColor: colors.card,
     borderRadius: 20,

@@ -1,5 +1,5 @@
 import { Link, Redirect } from 'expo-router';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -12,13 +12,16 @@ import {
   View,
 } from 'react-native';
 
-import { colors } from '@/constants/theme';
+import { ThemeColors } from '@/constants/theme';
 import { isDemoMode } from '@/lib/config';
 import { useAuth } from '@/lib/AuthProvider';
 import { supabase } from '@/lib/supabase';
+import { useColors } from '@/lib/ThemeProvider';
 
 export default function SignupScreen() {
   const { session, signUp } = useAuth();
+  const colors = useColors();
+  const styles = useMemo(() => getStyles(colors), [colors]);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -73,6 +76,7 @@ export default function SignupScreen() {
       <TextInput
         style={styles.input}
         placeholder="Correo electrónico"
+        placeholderTextColor={colors.textMuted}
         autoCapitalize="none"
         keyboardType="email-address"
         value={email}
@@ -81,6 +85,7 @@ export default function SignupScreen() {
       <TextInput
         style={styles.input}
         placeholder="Contraseña (mínimo 6 caracteres)"
+        placeholderTextColor={colors.textMuted}
         secureTextEntry
         value={password}
         onChangeText={setPassword}
@@ -103,7 +108,7 @@ export default function SignupScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
     justifyContent: 'center',
@@ -138,6 +143,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     fontSize: 16,
     marginBottom: 12,
+    color: colors.text,
   },
   button: {
     backgroundColor: colors.primary,

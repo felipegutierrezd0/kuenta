@@ -184,3 +184,196 @@ create policy "delete debts in own workspaces" on debts
   for delete using (
     workspace_id in (select workspace_id from workspace_members where user_id = auth.uid())
   );
+
+-- ============================================================================
+-- Ampliación: cuentas, presupuestos, metas, recurrentes, cobros/pagos, invitaciones.
+-- ============================================================================
+
+-- Cuentas (banco, efectivo, tarjeta) para poder ver saldos reales por cuenta.
+create table if not exists accounts (
+  id uuid primary key default gen_random_uuid(),
+  workspace_id uuid not null references workspaces(id) on delete cascade,
+  name text not null,
+  kind text not null check (kind in ('efectivo', 'banco', 'tarjeta', 'otro')),
+  initial_balance numeric(12, 2) not null default 0,
+  created_at timestamptz not null default now()
+);
+
+alter table transactions add column if not exists account_id uuid references accounts(id) on delete set null;
+
+create index if not exists accounts_workspace_idx on accounts (workspace_id);
+create index if not exists transactions_account_idx on transactions (account_id);
+
+-- Presupuestos mensuales por categoría de gasto.
+create table if not exists budgets (
+  id uuid primary key default gen_random_uuid(),
+  workspace_id uuid not null references workspaces(id) on delete cascade,
+  category_id uuid not null references categories(id) on delete cascade,
+  monthly_limit numeric(12, 2) not null check (monthly_limit > 0),
+  created_at timestamptz not null default now(),
+  unique (workspace_id, category_id)
+);
+
+create index if not exists budgets_workspace_idx on budgets (workspace_id);
+
+-- Metas de ahorro con objetivo y fecha.
+create table if not exists savings_goals (
+  id uuid primary key default gen_random_uuid(),
+  workspace_id uuid not null references workspaces(id) on delete cascade,
+  name text not null,
+  target_amount numeric(12, 2) not null check (target_amount > 0),
+  target_date date,
+  saved_amount numeric(12, 2) not null default 0 check (saved_amount >= 0),
+  created_at timestamptz not null default now()
+);
+
+create index if not exists savings_goals_workspace_idx on savings_goals (workspace_id);
+
+-- Plantillas de movimientos recurrentes (suscripciones, renta, nómina, etc.).
+create table if not exists recurring_transactions (
+  id uuid primary key default gen_random_uuid(),
+  workspace_id uuid not null references workspaces(id) on delete cascade,
+  category_id uuid references categories(id) on delete set null,
+  type text not null check (type in ('ingreso', 'gasto', 'ahorro')),
+  amount numeric(12, 2) not null check (amount > 0),
+  note text,
+  frequency text not null check (frequency in ('semanal', 'quincenal', 'mensual')),
+  next_due_date date not null,
+  active boolean not null default true,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists recurring_workspace_idx on recurring_transactions (workspace_id);
+
+-- Cuentas por cobrar/pagar (pensado para workspaces tipo "negocio").
+create table if not exists receivables (
+  id uuid primary key default gen_random_uuid(),
+  workspace_id uuid not null references workspaces(id) on delete cascade,
+  direction text not null check (direction in ('cobrar', 'pagar')),
+  counterparty text not null,
+  amount numeric(12, 2) not null check (amount > 0),
+  due_date date,
+  status text not null default 'pendiente' check (status in ('pendiente', 'pagado')),
+  created_at timestamptz not null default now()
+);
+
+create index if not exists receivables_workspace_idx on receivables (workspace_id);
+
+-- Invitaciones a workspace por correo (para invitar miembros a un negocio).
+create table if not exists workspace_invites (
+  id uuid primary key default gen_random_uuid(),
+  workspace_id uuid not null references workspaces(id) on delete cascade,
+  email text not null,
+  role text not null check (role in ('admin', 'member')) default 'member',
+  created_at timestamptz not null default now(),
+  unique (workspace_id, email)
+);
+
+create index if not exists workspace_invites_email_idx on workspace_invites (email);
+
+-- RLS: mismo patrón que el resto de tablas (acceso restringido a los miembros del workspace).
+alter table accounts enable row level security;
+alter table budgets enable row level security;
+alter table savings_goals enable row level security;
+alter table recurring_transactions enable row level security;
+alter table receivables enable row level security;
+alter table workspace_invites enable row level security;
+
+create policy "select accounts in own workspaces" on accounts
+  for select using (workspace_id in (select workspace_id from workspace_members where user_id = auth.uid()));
+create policy "insert accounts in own workspaces" on accounts
+  for insert with check (workspace_id in (select workspace_id from workspace_members where user_id = auth.uid()));
+create policy "update accounts in own workspaces" on accounts
+  for update using (workspace_id in (select workspace_id from workspace_members where user_id = auth.uid()));
+create policy "delete accounts in own workspaces" on accounts
+  for delete using (workspace_id in (select workspace_id from workspace_members where user_id = auth.uid()));
+
+create policy "select budgets in own workspaces" on budgets
+  for select using (workspace_id in (select workspace_id from workspace_members where user_id = auth.uid()));
+create policy "insert budgets in own workspaces" on budgets
+  for insert with check (workspace_id in (select workspace_id from workspace_members where user_id = auth.uid()));
+create policy "update budgets in own workspaces" on budgets
+  for update using (workspace_id in (select workspace_id from workspace_members where user_id = auth.uid()));
+create policy "delete budgets in own workspaces" on budgets
+  for delete using (workspace_id in (select workspace_id from workspace_members where user_id = auth.uid()));
+
+create policy "select goals in own workspaces" on savings_goals
+  for select using (workspace_id in (select workspace_id from workspace_members where user_id = auth.uid()));
+create policy "insert goals in own workspaces" on savings_goals
+  for insert with check (workspace_id in (select workspace_id from workspace_members where user_id = auth.uid()));
+create policy "update goals in own workspaces" on savings_goals
+  for update using (workspace_id in (select workspace_id from workspace_members where user_id = auth.uid()));
+create policy "delete goals in own workspaces" on savings_goals
+  for delete using (workspace_id in (select workspace_id from workspace_members where user_id = auth.uid()));
+
+create policy "select recurring in own workspaces" on recurring_transactions
+  for select using (workspace_id in (select workspace_id from workspace_members where user_id = auth.uid()));
+create policy "insert recurring in own workspaces" on recurring_transactions
+  for insert with check (workspace_id in (select workspace_id from workspace_members where user_id = auth.uid()));
+create policy "update recurring in own workspaces" on recurring_transactions
+  for update using (workspace_id in (select workspace_id from workspace_members where user_id = auth.uid()));
+create policy "delete recurring in own workspaces" on recurring_transactions
+  for delete using (workspace_id in (select workspace_id from workspace_members where user_id = auth.uid()));
+
+create policy "select receivables in own workspaces" on receivables
+  for select using (workspace_id in (select workspace_id from workspace_members where user_id = auth.uid()));
+create policy "insert receivables in own workspaces" on receivables
+  for insert with check (workspace_id in (select workspace_id from workspace_members where user_id = auth.uid()));
+create policy "update receivables in own workspaces" on receivables
+  for update using (workspace_id in (select workspace_id from workspace_members where user_id = auth.uid()));
+create policy "delete receivables in own workspaces" on receivables
+  for delete using (workspace_id in (select workspace_id from workspace_members where user_id = auth.uid()));
+
+-- Invitaciones: los owner/admin del workspace pueden crear/borrar; el invitado puede ver
+-- (y luego aceptar vía RPC) las invitaciones dirigidas a su propio correo.
+create policy "select own invites" on workspace_invites
+  for select using (
+    email = (auth.jwt() ->> 'email')
+    or workspace_id in (
+      select workspace_id from workspace_members where user_id = auth.uid() and role in ('owner', 'admin')
+    )
+  );
+create policy "insert invites as owner or admin" on workspace_invites
+  for insert with check (
+    workspace_id in (
+      select workspace_id from workspace_members where user_id = auth.uid() and role in ('owner', 'admin')
+    )
+  );
+create policy "delete invites as owner or admin" on workspace_invites
+  for delete using (
+    workspace_id in (
+      select workspace_id from workspace_members where user_id = auth.uid() and role in ('owner', 'admin')
+    )
+  );
+
+-- Acepta una invitación pendiente dirigida al correo del usuario autenticado: lo agrega como
+-- miembro del workspace con el rol invitado y borra la invitación. security definer porque el
+-- usuario invitado todavía no es miembro del workspace (no pasaría la policy de insert normal).
+create or replace function public.accept_workspace_invite(p_invite_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_invite workspace_invites%rowtype;
+begin
+  select * into v_invite from workspace_invites where id = p_invite_id;
+
+  if v_invite.id is null then
+    raise exception 'Invitación no encontrada';
+  end if;
+
+  if v_invite.email <> (auth.jwt() ->> 'email') then
+    raise exception 'Esta invitación no corresponde a tu correo';
+  end if;
+
+  insert into workspace_members (workspace_id, user_id, role)
+    values (v_invite.workspace_id, auth.uid(), v_invite.role)
+    on conflict (workspace_id, user_id) do nothing;
+
+  delete from workspace_invites where id = p_invite_id;
+end;
+$$;
+
+grant execute on function public.accept_workspace_invite(uuid) to authenticated;

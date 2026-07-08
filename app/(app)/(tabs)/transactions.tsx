@@ -6,15 +6,18 @@ import { ActivityIndicator, Alert, FlatList, Pressable, StyleSheet, Text, View }
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { TransactionListItem } from '@/components/TransactionListItem';
-import { colors, typeLabels } from '@/constants/theme';
+import { ThemeColors, typeLabels } from '@/constants/theme';
 import { monthRange } from '@/lib/dateRange';
 import { useDeleteTransaction, useTransactions } from '@/lib/queries/useTransactions';
+import { useColors } from '@/lib/ThemeProvider';
 import { useWorkspace } from '@/lib/WorkspaceProvider';
 import { EntryType, Transaction } from '@/types/database';
 
 const FILTERS: (EntryType | 'todos')[] = ['todos', 'ingreso', 'gasto', 'ahorro'];
 
 export default function TransactionsScreen() {
+  const colors = useColors();
+  const styles = useMemo(() => getStyles(colors), [colors]);
   const { currentWorkspace } = useWorkspace();
   const [month, setMonth] = useState(new Date());
   const [filter, setFilter] = useState<EntryType | 'todos'>('todos');
@@ -83,7 +86,7 @@ export default function TransactionsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors: ThemeColors) => StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: colors.background,

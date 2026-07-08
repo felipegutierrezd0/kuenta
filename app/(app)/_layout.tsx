@@ -1,11 +1,12 @@
 import { Redirect, Stack } from 'expo-router';
 import { ActivityIndicator, View } from 'react-native';
 
-import { colors } from '@/constants/theme';
 import { useAuth } from '@/lib/AuthProvider';
+import { useColors } from '@/lib/ThemeProvider';
 
 export default function AppLayout() {
   const { session, initializing } = useAuth();
+  const colors = useColors();
 
   if (initializing) {
     return (
@@ -22,6 +23,12 @@ export default function AppLayout() {
       <Stack.Screen name="(tabs)" />
       <Stack.Screen name="add" options={{ presentation: 'modal' }} />
       <Stack.Screen name="chat" options={{ presentation: 'modal' }} />
+      <Stack.Screen name="accounts" />
+      <Stack.Screen name="budgets" />
+      <Stack.Screen name="goals" />
+      <Stack.Screen name="recurring" />
+      <Stack.Screen name="receivables" />
+      <Stack.Screen name="members" />
     </Stack>
   );
 }

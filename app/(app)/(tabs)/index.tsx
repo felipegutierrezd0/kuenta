@@ -4,23 +4,32 @@ import { useMemo } from 'react';
 import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { AccountBalanceRow } from '@/components/AccountBalanceRow';
 import { MonthlySummaryCard } from '@/components/MonthlySummaryCard';
 import { QuickAddButtons } from '@/components/QuickAddButtons';
+import { RecurringDueBanner } from '@/components/RecurringDueBanner';
 import { TransactionListItem } from '@/components/TransactionListItem';
 import { WorkspaceSwitcher } from '@/components/WorkspaceSwitcher';
-import { colors } from '@/constants/theme';
+import { ThemeColors } from '@/constants/theme';
 import { monthRange } from '@/lib/dateRange';
+import { useAccountBalances } from '@/lib/queries/useAccounts';
 import { useMonthlySummary } from '@/lib/queries/useMonthlySummary';
+import { useRecurringTransactions } from '@/lib/queries/useRecurringTransactions';
 import { useTransactions } from '@/lib/queries/useTransactions';
+import { useColors } from '@/lib/ThemeProvider';
 import { useWorkspace } from '@/lib/WorkspaceProvider';
 
 export default function DashboardScreen() {
+  const colors = useColors();
+  const styles = useMemo(() => getStyles(colors), [colors]);
   const { currentWorkspace, loading: workspaceLoading } = useWorkspace();
   const { start, end } = useMemo(() => monthRange(new Date()), []);
   const monthLabel = format(new Date(), 'MMMM yyyy', { locale: es });
 
   const summaryQuery = useMonthlySummary(currentWorkspace?.id, start, end);
   const transactionsQuery = useTransactions({ workspaceId: currentWorkspace?.id, monthStart: start, monthEnd: end });
+  const accountBalances = useAccountBalances(currentWorkspace?.id);
+  const recurringQuery = useRecurringTransactions(currentWorkspace?.id);
 
   const recentTransactions = (transactionsQuery.data ?? []).slice(0, 5);
 
@@ -56,6 +65,10 @@ export default function DashboardScreen() {
           </View>
         )}
 
+        <AccountBalanceRow accounts={accountBalances.data} />
+
+        <RecurringDueBanner recurring={recurringQuery.data ?? []} workspaceId={currentWorkspace?.id} />
+
         <QuickAddButtons />
 
         <View style={styles.section}>
@@ -71,7 +84,7 @@ export default function DashboardScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors: ThemeColors) => StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: colors.background,

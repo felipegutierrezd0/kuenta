@@ -1,20 +1,29 @@
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { router } from 'expo-router';
+import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { colors } from '@/constants/theme';
+import { ThemeColors } from '@/constants/theme';
+import { useColors } from '@/lib/ThemeProvider';
 import { EntryType } from '@/types/database';
 
-const BUTTONS: { type: EntryType; label: string; icon: keyof typeof MaterialCommunityIcons.glyphMap; color: string; bg: string }[] = [
-  { type: 'ingreso', label: 'Ingreso', icon: 'arrow-down-circle', color: colors.ingreso, bg: colors.ingresoBg },
-  { type: 'gasto', label: 'Gasto', icon: 'arrow-up-circle', color: colors.gasto, bg: colors.gastoBg },
-  { type: 'ahorro', label: 'Ahorro', icon: 'piggy-bank', color: colors.ahorro, bg: colors.ahorroBg },
-];
+function buildButtons(
+  colors: ThemeColors
+): { type: EntryType; label: string; icon: keyof typeof MaterialCommunityIcons.glyphMap; color: string; bg: string }[] {
+  return [
+    { type: 'ingreso', label: 'Ingreso', icon: 'arrow-down-circle', color: colors.ingreso, bg: colors.ingresoBg },
+    { type: 'gasto', label: 'Gasto', icon: 'arrow-up-circle', color: colors.gasto, bg: colors.gastoBg },
+    { type: 'ahorro', label: 'Ahorro', icon: 'piggy-bank', color: colors.ahorro, bg: colors.ahorroBg },
+  ];
+}
 
 export function QuickAddButtons() {
+  const colors = useColors();
+  const styles = useMemo(() => getStyles(colors), [colors]);
+  const buttons = useMemo(() => buildButtons(colors), [colors]);
   return (
     <View style={styles.row}>
-      {BUTTONS.map((btn) => (
+      {buttons.map((btn) => (
         <Pressable
           key={btn.type}
           style={[styles.button, { backgroundColor: btn.bg }]}
@@ -28,7 +37,7 @@ export function QuickAddButtons() {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors: ThemeColors) => StyleSheet.create({
   row: {
     flexDirection: 'row',
     gap: 12,

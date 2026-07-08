@@ -1,6 +1,6 @@
-import { getDate, getDaysInMonth } from 'date-fns';
+import { addDays, getDate, getDaysInMonth } from 'date-fns';
 
-import { Debt, EntryType, Transaction } from '@/types/database';
+import { Budget, Debt, EntryType, RecurringTransaction, SavingsGoal, Transaction } from '@/types/database';
 
 export const ESSENTIAL_CATEGORIES = new Set(['Renta', 'Servicios']);
 export const LIVING_COST_CATEGORIES = new Set(['Renta', 'Servicios', 'Comida', 'Transporte']);
@@ -134,6 +134,33 @@ export function computeCategoryOverrun(ctx: MonthContext): CategoryOverrun | nul
   return worst;
 }
 
+export interface BudgetOverrun {
+  categoryName: string;
+  projected: number;
+  limit: number;
+  pct: number;
+}
+
+// A diferencia de computeCategoryOverrun (que compara contra el promedio histórico), esta
+// función usa el límite explícito que el usuario definió en Presupuestos, proyectando el gasto
+// del mes en curso al ritmo actual (total / fracción transcurrida del mes).
+export function computeBudgetOverrun(ctx: MonthContext, budgets: Budget[]): BudgetOverrun | null {
+  if (budgets.length === 0) return null;
+  const current = categoryTotals(ctx.currentMonthTx, 'gasto');
+
+  let worst: BudgetOverrun | null = null;
+  for (const budget of budgets) {
+    const categoryName = budget.category?.name;
+    if (!categoryName) continue;
+    const spent = current.get(categoryName) ?? 0;
+    const projected = spent / ctx.elapsedFraction;
+    if (projected <= budget.monthly_limit) continue;
+    const pct = ((projected - budget.monthly_limit) / budget.monthly_limit) * 100;
+    if (!worst || pct > worst.pct) worst = { categoryName, projected, limit: budget.monthly_limit, pct };
+  }
+  return worst;
+}
+
 export function computeDiscretionarySavings(ctx: MonthContext): number {
   const current = categoryTotals(ctx.currentMonthTx, 'gasto');
   const discretionaryTotal = Array.from(current.entries())
@@ -149,4 +176,148 @@ export function computeLivingCostMonthly(ctx: MonthContext): number {
     if (LIVING_COST_CATEGORIES.has(name)) total += amount;
   }
   return total / ctx.pastMonthsCount;
+}
+
+export interface HealthScoreBreakdownItem {
+  label: string;
+  points: number;
+  max: number;
+}
+
+export interface FinancialHealthScore {
+  score: number;
+  breakdown: HealthScoreBreakdownItem[];
+}
+
+// Puntaje simple 0-100 que combina cuatro señales ya calculadas en otras partes de este archivo.
+// Es una guía orientativa, no un dictamen financiero: cada componente tiene un tope fijo de puntos
+// para que el usuario pueda ver en qué área está bien y en cuál no.
+export function computeFinancialHealthScore(
+  transactions: Transaction[],
+  debts: Debt[],
+  budgets: Budget[],
+  today: Date = new Date()
+): FinancialHealthScore {
+  const ctx = buildMonthContext(transactions, today);
+  const breakdown: HealthScoreBreakdownItem[] = [];
+
+  // Tasa de ahorro (hasta 30 pts): 20% de los ingresos ahorrados ya es el máximo.
+  const totalIngresos = sumByType(transactions, 'ingreso');
+  const totalAhorro = sumByType(transactions, 'ahorro');
+  const savingsRate = totalIngresos > 0 ? totalAhorro / totalIngresos : 0;
+  breakdown.push({ label: 'Tasa de ahorro', points: Math.round(Math.min(1, savingsRate / 0.2) * 30), max: 30 });
+
+  // Deuda vs. ingreso anualizado (hasta 25 pts).
+  const totalDebt = sumBy(debts, (d) => d.balance);
+  const avgMonthlyIncome = totalIngresos / (ctx.pastMonthsCount + 1);
+  const debtRatio = avgMonthlyIncome > 0 ? totalDebt / (avgMonthlyIncome * 12) : totalDebt > 0 ? 1 : 0;
+  breakdown.push({ label: 'Deuda vs. ingresos', points: Math.round(Math.max(0, 1 - Math.min(1, debtRatio)) * 25), max: 25 });
+
+  // Cumplimiento de presupuesto (hasta 25 pts). Sin presupuestos definidos, no penalizamos.
+  let budgetPoints = 25;
+  if (budgets.length > 0) {
+    const current = categoryTotals(ctx.currentMonthTx, 'gasto');
+    const overrunCount = budgets.filter((b) => {
+      if (!b.category?.name) return false;
+      const spent = current.get(b.category.name) ?? 0;
+      return spent / ctx.elapsedFraction > b.monthly_limit;
+    }).length;
+    budgetPoints = Math.round(((budgets.length - overrunCount) / budgets.length) * 25);
+  }
+  breakdown.push({ label: 'Cumplimiento de presupuesto', points: budgetPoints, max: 25 });
+
+  // Colchón de caja / cash runway (hasta 20 pts).
+  const { cumulativeBalance, dailyNet } = computeCashRunway(ctx, transactions);
+  let runwayPoints = 20;
+  if (dailyNet < 0) {
+    const daysLeft = cumulativeBalance > 0 ? cumulativeBalance / Math.abs(dailyNet) : 0;
+    runwayPoints = Math.round(Math.max(0, Math.min(1, daysLeft / 90)) * 20);
+  }
+  breakdown.push({ label: 'Colchón de caja', points: runwayPoints, max: 20 });
+
+  const score = breakdown.reduce((acc, b) => acc + b.points, 0);
+  return { score, breakdown };
+}
+
+function recurringOccurrencesInWindow(recurring: RecurringTransaction, today: Date, daysAhead: number): number {
+  const stepDays = recurring.frequency === 'semanal' ? 7 : recurring.frequency === 'quincenal' ? 15 : 30;
+  const horizon = addDays(today, daysAhead);
+  let cursor = new Date(`${recurring.next_due_date}T00:00:00`);
+  let count = 0;
+  while (cursor <= horizon) {
+    if (cursor >= today) count += 1;
+    cursor = addDays(cursor, stepDays);
+  }
+  return count;
+}
+
+export interface CashflowForecastPoint {
+  daysAhead: number;
+  projectedBalance: number;
+}
+
+// Proyección simplificada: saldo actual + tendencia histórica diaria (excluyendo categorías ya
+// cubiertas por recurrentes, para no contarlas dos veces) + las próximas ocurrencias conocidas de
+// cada recurrente activo. No sustituye una proyección contable real, es una guía de tendencia.
+export function computeCashflowForecast(
+  transactions: Transaction[],
+  recurring: RecurringTransaction[],
+  today: Date = new Date(),
+  horizons: number[] = [30, 60, 90]
+): CashflowForecastPoint[] {
+  const currentBalance = cumulativeBalanceOf(transactions);
+  const ctx = buildMonthContext(transactions, today);
+  const activeRecurring = recurring.filter((r) => r.active);
+  const recurringCategoryIds = new Set(activeRecurring.map((r) => r.category_id).filter((id): id is string => !!id));
+
+  const backgroundTx = ctx.pastMonthsTx.filter((t) => !t.category_id || !recurringCategoryIds.has(t.category_id));
+  const avgDailyBackgroundNet = netOf(backgroundTx) / (ctx.pastMonthsCount * 30);
+
+  return horizons.map((daysAhead) => {
+    const recurringNet = activeRecurring.reduce((acc, r) => {
+      const occurrences = recurringOccurrencesInWindow(r, today, daysAhead);
+      const sign = r.type === 'ingreso' ? 1 : -1;
+      return acc + sign * r.amount * occurrences;
+    }, 0);
+    const projectedBalance = currentBalance + avgDailyBackgroundNet * daysAhead + recurringNet;
+    return { daysAhead, projectedBalance };
+  });
+}
+
+// Metas cuyo ritmo de ahorro actual no alcanza para llegar a la fecha objetivo (o que ya la
+// pasaron sin completarse). Compara el avance esperado (lineal desde la creación hasta la fecha
+// objetivo) contra lo realmente ahorrado, con un margen de 30% antes de considerarlas "atrasadas".
+export function computeGoalsOffTrack(goals: SavingsGoal[], today: Date = new Date()): SavingsGoal[] {
+  return goals.filter((goal) => {
+    if (!goal.target_date || goal.saved_amount >= goal.target_amount) return false;
+    const targetDate = new Date(`${goal.target_date}T00:00:00`);
+    if (today > targetDate) return true;
+    const createdAt = new Date(goal.created_at);
+    const totalDuration = targetDate.getTime() - createdAt.getTime();
+    if (totalDuration <= 0) return false;
+    const expectedFraction = Math.min(1, Math.max(0, (today.getTime() - createdAt.getTime()) / totalDuration));
+    const expectedSaved = goal.target_amount * expectedFraction;
+    return goal.saved_amount < expectedSaved * 0.7;
+  });
+}
+
+export interface FixedVsVariable {
+  fixed: number;
+  variable: number;
+}
+
+// Aproximación honesta a "punto de equilibrio" sin inventar datos de unidad económica que la app
+// no modela: gasto fijo = categorías con un recurrente activo, variable = el resto.
+export function computeFixedVsVariable(ctx: MonthContext, recurring: RecurringTransaction[]): FixedVsVariable {
+  const fixedCategoryIds = new Set(
+    recurring.filter((r) => r.active && r.type === 'gasto').map((r) => r.category_id).filter((id): id is string => !!id)
+  );
+  let fixed = 0;
+  let variable = 0;
+  for (const t of ctx.currentMonthTx) {
+    if (t.type !== 'gasto') continue;
+    if (t.category_id && fixedCategoryIds.has(t.category_id)) fixed += t.amount;
+    else variable += t.amount;
+  }
+  return { fixed, variable };
 }

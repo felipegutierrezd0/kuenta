@@ -1,7 +1,7 @@
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { format } from 'date-fns';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -15,9 +15,11 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { colors, typeLabels } from '@/constants/theme';
+import { ThemeColors, typeLabels } from '@/constants/theme';
+import { useAccounts } from '@/lib/queries/useAccounts';
 import { useCategories } from '@/lib/queries/useCategories';
 import { useAddTransaction } from '@/lib/queries/useTransactions';
+import { useColors } from '@/lib/ThemeProvider';
 import { useWorkspace } from '@/lib/WorkspaceProvider';
 import { EntryType } from '@/types/database';
 
@@ -27,13 +29,17 @@ export default function AddTransactionScreen() {
   const params = useLocalSearchParams<{ type?: string }>();
   const initialType = TYPES.includes(params.type as EntryType) ? (params.type as EntryType) : 'gasto';
 
+  const colors = useColors();
+  const styles = useMemo(() => getStyles(colors), [colors]);
   const { currentWorkspace } = useWorkspace();
   const [type, setType] = useState<EntryType>(initialType);
   const [amount, setAmount] = useState('');
   const [categoryId, setCategoryId] = useState<string | null>(null);
+  const [accountId, setAccountId] = useState<string | null>(null);
   const [note, setNote] = useState('');
 
   const categoriesQuery = useCategories(currentWorkspace?.id, type);
+  const accountsQuery = useAccounts(currentWorkspace?.id);
   const addTransaction = useAddTransaction();
 
   const activeColor = colors[type];
@@ -52,6 +58,7 @@ export default function AddTransactionScreen() {
       type,
       amount: parsedAmount,
       categoryId,
+      accountId,
       note: note.trim() || null,
       occurredOn: format(new Date(), 'yyyy-MM-dd'),
     });
@@ -118,10 +125,34 @@ export default function AddTransactionScreen() {
             ))}
           </View>
 
+          {(accountsQuery.data ?? []).length > 0 && (
+            <>
+              <Text style={styles.label}>Cuenta (opcional)</Text>
+              <View style={styles.categoryGrid}>
+                <Pressable
+                  style={[styles.categoryChip, accountId === null && { backgroundColor: activeColor, borderColor: activeColor }]}
+                  onPress={() => setAccountId(null)}
+                >
+                  <Text style={[styles.categoryChipText, accountId === null && { color: '#fff' }]}>Sin cuenta</Text>
+                </Pressable>
+                {(accountsQuery.data ?? []).map((acc) => (
+                  <Pressable
+                    key={acc.id}
+                    style={[styles.categoryChip, accountId === acc.id && { backgroundColor: activeColor, borderColor: activeColor }]}
+                    onPress={() => setAccountId(acc.id)}
+                  >
+                    <Text style={[styles.categoryChipText, accountId === acc.id && { color: '#fff' }]}>{acc.name}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            </>
+          )}
+
           <Text style={styles.label}>Nota (opcional)</Text>
           <TextInput
             style={styles.noteInput}
             placeholder="Ej. Supermercado, pago cliente..."
+            placeholderTextColor={colors.textMuted}
             value={note}
             onChangeText={setNote}
           />
@@ -147,7 +178,7 @@ export default function AddTransactionScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors: ThemeColors) => StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: colors.background,
@@ -241,6 +272,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     fontSize: 15,
+    color: colors.text,
   },
   error: {
     color: colors.gasto,

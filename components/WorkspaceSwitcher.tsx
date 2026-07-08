@@ -1,11 +1,14 @@
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { colors } from '@/constants/theme';
+import { ThemeColors } from '@/constants/theme';
+import { useColors } from '@/lib/ThemeProvider';
 import { useWorkspace } from '@/lib/WorkspaceProvider';
 
 export function WorkspaceSwitcher() {
+  const colors = useColors();
+  const styles = useMemo(() => getStyles(colors), [colors]);
   const { workspaces, currentWorkspace, switchWorkspace } = useWorkspace();
   const [open, setOpen] = useState(false);
 
@@ -62,7 +65,7 @@ export function WorkspaceSwitcher() {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors: ThemeColors) => StyleSheet.create({
   trigger: {
     flexDirection: 'row',
     alignItems: 'center',
