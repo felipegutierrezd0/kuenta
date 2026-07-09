@@ -2,11 +2,12 @@ import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { format } from 'date-fns';
 import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { GoalCard } from '@/components/GoalCard';
 import { ThemeColors } from '@/constants/theme';
+import { confirmDestructive } from '@/lib/alert';
 import {
   useAddSavingsGoal,
   useContributeToGoal,
@@ -42,10 +43,7 @@ export default function GoalsScreen() {
   }
 
   function handleDelete(id: string, goalName: string) {
-    Alert.alert('Eliminar meta', `¿Eliminar "${goalName}"?`, [
-      { text: 'Cancelar', style: 'cancel' },
-      { text: 'Eliminar', style: 'destructive', onPress: () => deleteGoal.mutate(id) },
-    ]);
+    confirmDestructive('Eliminar meta', `¿Eliminar "${goalName}"?`, 'Eliminar', () => deleteGoal.mutate(id));
   }
 
   return (

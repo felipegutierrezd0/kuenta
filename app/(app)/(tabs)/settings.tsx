@@ -1,11 +1,12 @@
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemeColors, typeLabels } from '@/constants/theme';
 import { useAuth } from '@/lib/AuthProvider';
+import { confirmDestructive, notify } from '@/lib/alert';
 import { exportTransactionsCsv } from '@/lib/export';
 import {
   useAddCategory,
@@ -70,7 +71,7 @@ export default function SettingsScreen() {
     try {
       await exportTransactionsCsv(allTransactionsQuery.data ?? []);
     } catch (e: any) {
-      Alert.alert('Error', e.message ?? 'No se pudo exportar');
+      notify('Error', e.message ?? 'No se pudo exportar');
     } finally {
       setExporting(false);
     }
@@ -97,7 +98,7 @@ export default function SettingsScreen() {
       await createWorkspace(newWorkspaceName.trim(), newWorkspaceType);
       setNewWorkspaceName('');
     } catch (e: any) {
-      Alert.alert('Error', e.message ?? 'No se pudo crear el workspace');
+      notify('Error', e.message ?? 'No se pudo crear el workspace');
     } finally {
       setCreatingWorkspace(false);
     }
@@ -110,7 +111,7 @@ export default function SettingsScreen() {
       await renameWorkspace(workspaceId, draftWorkspaceName.trim());
       setEditingWorkspaceId(null);
     } catch (e: any) {
-      Alert.alert('Error', e.message ?? 'No se pudo renombrar el workspace');
+      notify('Error', e.message ?? 'No se pudo renombrar el workspace');
     } finally {
       setRenamingWorkspace(false);
     }
@@ -126,10 +127,7 @@ export default function SettingsScreen() {
   }
 
   function handleDeleteCategory(id: string, name: string) {
-    Alert.alert('Eliminar categoría', `¿Eliminar "${name}"?`, [
-      { text: 'Cancelar', style: 'cancel' },
-      { text: 'Eliminar', style: 'destructive', onPress: () => deleteCategory.mutate(id) },
-    ]);
+    confirmDestructive('Eliminar categoría', `¿Eliminar "${name}"?`, 'Eliminar', () => deleteCategory.mutate(id));
   }
 
   function handleSaveCategoryName(id: string) {

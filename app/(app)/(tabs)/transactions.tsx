@@ -2,11 +2,12 @@ import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { addMonths, format, subMonths } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { TransactionListItem } from '@/components/TransactionListItem';
 import { ThemeColors, typeLabels } from '@/constants/theme';
+import { confirmDestructive } from '@/lib/alert';
 import { monthRange } from '@/lib/dateRange';
 import { useDeleteTransaction, useTransactions } from '@/lib/queries/useTransactions';
 import { useColors } from '@/lib/ThemeProvider';
@@ -32,10 +33,9 @@ export default function TransactionsScreen() {
   const deleteTransaction = useDeleteTransaction(currentWorkspace?.id);
 
   function confirmDelete(transaction: Transaction) {
-    Alert.alert('Eliminar movimiento', '¿Seguro que quieres eliminarlo?', [
-      { text: 'Cancelar', style: 'cancel' },
-      { text: 'Eliminar', style: 'destructive', onPress: () => deleteTransaction.mutate(transaction.id) },
-    ]);
+    confirmDestructive('Eliminar movimiento', '¿Seguro que quieres eliminarlo?', 'Eliminar', () =>
+      deleteTransaction.mutate(transaction.id)
+    );
   }
 
   return (

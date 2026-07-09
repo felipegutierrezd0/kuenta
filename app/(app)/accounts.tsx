@@ -1,10 +1,11 @@
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemeColors } from '@/constants/theme';
+import { confirmDestructive } from '@/lib/alert';
 import { formatCurrency } from '@/lib/format';
 import { useAccountBalances, useAddAccount, useDeleteAccount, useUpdateAccount } from '@/lib/queries/useAccounts';
 import { useColors } from '@/lib/ThemeProvider';
@@ -63,10 +64,12 @@ export default function AccountsScreen() {
   }
 
   function handleDelete(id: string, accountName: string) {
-    Alert.alert('Eliminar cuenta', `¿Eliminar "${accountName}"? Los movimientos ya no estarán asociados a ella.`, [
-      { text: 'Cancelar', style: 'cancel' },
-      { text: 'Eliminar', style: 'destructive', onPress: () => deleteAccount.mutate(id) },
-    ]);
+    confirmDestructive(
+      'Eliminar cuenta',
+      `¿Eliminar "${accountName}"? Los movimientos ya no estarán asociados a ella.`,
+      'Eliminar',
+      () => deleteAccount.mutate(id)
+    );
   }
 
   return (

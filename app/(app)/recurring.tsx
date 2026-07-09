@@ -3,10 +3,11 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemeColors, typeLabels } from '@/constants/theme';
+import { confirmDestructive } from '@/lib/alert';
 import { formatCurrency } from '@/lib/format';
 import { useCategories } from '@/lib/queries/useCategories';
 import { useAddRecurring, useDeleteRecurring, useRecurringTransactions } from '@/lib/queries/useRecurringTransactions';
@@ -54,10 +55,7 @@ export default function RecurringScreen() {
   }
 
   function handleDelete(id: string, label: string) {
-    Alert.alert('Eliminar recurrente', `¿Eliminar "${label}"?`, [
-      { text: 'Cancelar', style: 'cancel' },
-      { text: 'Eliminar', style: 'destructive', onPress: () => deleteRecurring.mutate(id) },
-    ]);
+    confirmDestructive('Eliminar recurrente', `¿Eliminar "${label}"?`, 'Eliminar', () => deleteRecurring.mutate(id));
   }
 
   return (

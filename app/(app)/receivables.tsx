@@ -3,10 +3,11 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemeColors } from '@/constants/theme';
+import { confirmDestructive } from '@/lib/alert';
 import { formatCurrency } from '@/lib/format';
 import {
   useAddReceivable,
@@ -50,10 +51,7 @@ export default function ReceivablesScreen() {
   }
 
   function handleDelete(id: string, name: string) {
-    Alert.alert('Eliminar', `¿Eliminar "${name}"?`, [
-      { text: 'Cancelar', style: 'cancel' },
-      { text: 'Eliminar', style: 'destructive', onPress: () => deleteReceivable.mutate(id) },
-    ]);
+    confirmDestructive('Eliminar', `¿Eliminar "${name}"?`, 'Eliminar', () => deleteReceivable.mutate(id));
   }
 
   function renderItem(item: Receivable) {
