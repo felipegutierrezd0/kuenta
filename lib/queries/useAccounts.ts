@@ -56,6 +56,38 @@ export function useAddAccount(workspaceId: string | undefined) {
   });
 }
 
+export function useUpdateAccount(workspaceId: string | undefined) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      accountId,
+      name,
+      kind,
+      initialBalance,
+    }: {
+      accountId: string;
+      name: string;
+      kind: AccountKind;
+      initialBalance: number;
+    }) => {
+      if (isDemoMode) {
+        mockStore.updateAccount(accountId, name, kind, initialBalance);
+        return;
+      }
+      const { error } = await supabase
+        .from('accounts')
+        .update({ name, kind, initial_balance: initialBalance })
+        .eq('id', accountId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['accounts', workspaceId] });
+      queryClient.invalidateQueries({ queryKey: ['account-balances', workspaceId] });
+    },
+  });
+}
+
 export function useDeleteAccount(workspaceId: string | undefined) {
   const queryClient = useQueryClient();
 

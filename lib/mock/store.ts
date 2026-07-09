@@ -180,6 +180,10 @@ export const mockStore = {
     return account;
   },
 
+  updateAccount(accountId: string, name: string, kind: AccountKind, initialBalance: number) {
+    accounts = accounts.map((a) => (a.id === accountId ? { ...a, name, kind, initial_balance: initialBalance } : a));
+  },
+
   deleteAccount(accountId: string) {
     accounts = accounts.filter((a) => a.id !== accountId);
   },
