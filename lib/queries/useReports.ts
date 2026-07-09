@@ -17,14 +17,6 @@ export interface CategoryBreakdownItem {
   total: number;
 }
 
-// Todas las categorías de un mismo tipo comparten el mismo color base (para íconos/botones),
-// así que para que el gráfico de dona distinga cada categoría usamos una paleta de tonos por tipo.
-const PALETTES: Record<EntryType, string[]> = {
-  ingreso: ['#16a34a', '#4ade80', '#0d9488', '#65a30d', '#059669'],
-  gasto: ['#dc2626', '#f97316', '#e11d48', '#f59e0b', '#b91c1c', '#fb7185'],
-  ahorro: ['#2563eb', '#7c3aed', '#0891b2', '#6366f1', '#0ea5e9'],
-};
-
 export function useCategoryBreakdown(workspaceId: string | undefined, monthStart: string, monthEnd: string, type: EntryType) {
   return useQuery({
     queryKey: ['category-breakdown', workspaceId, monthStart, monthEnd, type],
@@ -54,10 +46,9 @@ export function useCategoryBreakdown(workspaceId: string | undefined, monthStart
         }
       }
 
-      const palette = PALETTES[type];
-      return Array.from(totals.values())
-        .sort((a, b) => b.total - a.total)
-        .map((item, index) => ({ ...item, color: palette[index % palette.length] }));
+      // Cada categoría ya tiene su propio color distinto asignado al crearse (lib/categoryColor.ts),
+      // así que aquí solo ordenamos — sin pisar el color guardado.
+      return Array.from(totals.values()).sort((a, b) => b.total - a.total);
     },
   });
 }
@@ -150,13 +141,12 @@ export function useCashflowForecast(workspaceId: string | undefined) {
 
 export function useFixedVsVariable(workspaceId: string | undefined) {
   const transactionsQuery = useAllTransactions(workspaceId);
-  const recurringQuery = useRecurringTransactions(workspaceId);
 
   const result = useMemo(() => {
     if (!transactionsQuery.data) return null;
     const ctx = buildMonthContext(transactionsQuery.data, new Date());
-    return computeFixedVsVariable(ctx, recurringQuery.data ?? []);
-  }, [transactionsQuery.data, recurringQuery.data]);
+    return computeFixedVsVariable(ctx);
+  }, [transactionsQuery.data]);
 
-  return { data: result, isLoading: transactionsQuery.isLoading || recurringQuery.isLoading };
+  return { data: result, isLoading: transactionsQuery.isLoading };
 }

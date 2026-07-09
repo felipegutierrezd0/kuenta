@@ -29,6 +29,7 @@ create table if not exists categories (
   type text not null check (type in ('ingreso', 'gasto', 'ahorro')),
   icon text,
   color text,
+  is_fixed boolean not null default false,
   created_at timestamptz not null default now()
 );
 
@@ -73,16 +74,20 @@ begin
 
   insert into workspace_members (workspace_id, user_id, role) values (v_workspace_id, p_user_id, 'owner');
 
-  insert into categories (workspace_id, name, type, icon, color) values
-    (v_workspace_id, 'Salario', 'ingreso', 'cash', '#16a34a'),
-    (v_workspace_id, 'Ventas', 'ingreso', 'trending-up', '#16a34a'),
-    (v_workspace_id, 'Otros ingresos', 'ingreso', 'plus-circle', '#16a34a'),
-    (v_workspace_id, 'Comida', 'gasto', 'food', '#dc2626'),
-    (v_workspace_id, 'Transporte', 'gasto', 'car', '#dc2626'),
-    (v_workspace_id, 'Servicios', 'gasto', 'flash', '#dc2626'),
-    (v_workspace_id, 'Renta', 'gasto', 'home', '#dc2626'),
-    (v_workspace_id, 'Otros gastos', 'gasto', 'dots-horizontal', '#dc2626'),
-    (v_workspace_id, 'Ahorro general', 'ahorro', 'piggy-bank', '#2563eb');
+  insert into categories (workspace_id, name, type, icon, color, is_fixed) values
+    -- Colores distintos por posición dentro de cada tipo (ángulo dorado, ver lib/categoryColor.ts)
+    -- para que el gráfico de Reportes nunca muestre dos categorías con el mismo color.
+    -- Renta y Servicios arrancan marcadas como gasto fijo (caso típico); el usuario puede
+    -- cambiarlo para cualquier categoría desde Ajustes → Categorías.
+    (v_workspace_id, 'Salario', 'ingreso', 'cash', '#d22d2d', false),
+    (v_workspace_id, 'Ventas', 'ingreso', 'trending-up', '#2dd25d', false),
+    (v_workspace_id, 'Otros ingresos', 'ingreso', 'plus-circle', '#8d2dd2', false),
+    (v_workspace_id, 'Comida', 'gasto', 'food', '#d22d2d', false),
+    (v_workspace_id, 'Transporte', 'gasto', 'car', '#2dd25d', false),
+    (v_workspace_id, 'Servicios', 'gasto', 'flash', '#8d2dd2', true),
+    (v_workspace_id, 'Renta', 'gasto', 'home', '#d2be2d', true),
+    (v_workspace_id, 'Otros gastos', 'gasto', 'dots-horizontal', '#2db7d2', false),
+    (v_workspace_id, 'Ahorro general', 'ahorro', 'piggy-bank', '#d22d2d', false);
 
   return v_workspace_id;
 end;
@@ -128,6 +133,11 @@ alter table debts enable row level security;
 create policy "select own workspaces" on workspaces
   for select using (
     id in (select workspace_id from workspace_members where user_id = auth.uid())
+  );
+
+create policy "update own workspaces" on workspaces
+  for update using (
+    id in (select workspace_id from workspace_members where user_id = auth.uid() and role in ('owner', 'admin'))
   );
 
 create policy "select own memberships" on workspace_members
@@ -200,6 +210,10 @@ create table if not exists accounts (
 );
 
 alter table transactions add column if not exists account_id uuid references accounts(id) on delete set null;
+
+-- Clasificación directa de gasto fijo/variable, definida por el usuario en Ajustes → Categorías
+-- (reemplaza la inferencia anterior basada en si la categoría tenía un recurrente activo).
+alter table categories add column if not exists is_fixed boolean not null default false;
 
 create index if not exists accounts_workspace_idx on accounts (workspace_id);
 create index if not exists transactions_account_idx on transactions (account_id);

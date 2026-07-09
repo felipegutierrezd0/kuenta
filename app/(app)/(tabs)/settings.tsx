@@ -8,7 +8,7 @@ import { ThemeColors, typeLabels } from '@/constants/theme';
 import { useAuth } from '@/lib/AuthProvider';
 import { exportTransactionsCsv } from '@/lib/export';
 import { formatCurrency } from '@/lib/format';
-import { useAddCategory, useCategories, useDeleteCategory } from '@/lib/queries/useCategories';
+import { useAddCategory, useCategories, useDeleteCategory, useUpdateCategoryFixed } from '@/lib/queries/useCategories';
 import { useAddDebt, useDebts, useDeleteDebt } from '@/lib/queries/useDebts';
 import { useAllTransactions } from '@/lib/queries/useTransactions';
 import { useColors, useTheme, ThemeMode } from '@/lib/ThemeProvider';
@@ -49,10 +49,11 @@ export default function SettingsScreen() {
   const colors = useColors();
   const styles = useMemo(() => getStyles(colors), [colors]);
   const { signOut } = useAuth();
-  const { workspaces, currentWorkspace, switchWorkspace, createWorkspace } = useWorkspace();
+  const { workspaces, currentWorkspace, switchWorkspace, createWorkspace, renameWorkspace } = useWorkspace();
   const categoriesQuery = useCategories(currentWorkspace?.id);
   const addCategory = useAddCategory(currentWorkspace?.id);
   const deleteCategory = useDeleteCategory(currentWorkspace?.id);
+  const updateCategoryFixed = useUpdateCategoryFixed(currentWorkspace?.id);
   const debtsQuery = useDebts(currentWorkspace?.id);
   const addDebt = useAddDebt(currentWorkspace?.id);
   const deleteDebt = useDeleteDebt(currentWorkspace?.id);
@@ -77,6 +78,10 @@ export default function SettingsScreen() {
   const [newWorkspaceType, setNewWorkspaceType] = useState<WorkspaceType>('negocio');
   const [creatingWorkspace, setCreatingWorkspace] = useState(false);
 
+  const [editingWorkspaceId, setEditingWorkspaceId] = useState<string | null>(null);
+  const [draftWorkspaceName, setDraftWorkspaceName] = useState('');
+  const [renamingWorkspace, setRenamingWorkspace] = useState(false);
+
   const [newCategoryName, setNewCategoryName] = useState('');
   const [newCategoryType, setNewCategoryType] = useState<EntryType>('gasto');
 
@@ -97,10 +102,24 @@ export default function SettingsScreen() {
     }
   }
 
+  async function saveWorkspaceName(workspaceId: string) {
+    if (!draftWorkspaceName.trim()) return;
+    setRenamingWorkspace(true);
+    try {
+      await renameWorkspace(workspaceId, draftWorkspaceName.trim());
+      setEditingWorkspaceId(null);
+    } catch (e: any) {
+      Alert.alert('Error', e.message ?? 'No se pudo renombrar el workspace');
+    } finally {
+      setRenamingWorkspace(false);
+    }
+  }
+
   function handleAddCategory() {
     if (!newCategoryName.trim()) return;
+    const existingCountOfType = (categoriesQuery.data ?? []).filter((c) => c.type === newCategoryType).length;
     addCategory.mutate(
-      { name: newCategoryName.trim(), type: newCategoryType },
+      { name: newCategoryName.trim(), type: newCategoryType, existingCountOfType },
       { onSuccess: () => setNewCategoryName('') }
     );
   }
@@ -142,29 +161,64 @@ export default function SettingsScreen() {
 
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Tus workspaces</Text>
-          {workspaces.map((w) => (
-            <Pressable key={w.id} style={styles.workspaceRow} onPress={() => switchWorkspace(w.id)}>
-              <MaterialCommunityIcons
-                name={w.type === 'negocio' ? 'store' : 'account'}
-                size={20}
-                color={
-                  w.id === currentWorkspace?.id
-                    ? w.type === 'negocio'
-                      ? colors.secondary
-                      : colors.primary
-                    : colors.textMuted
-                }
-              />
-              <Text style={styles.workspaceName}>{w.name}</Text>
-              {w.id === currentWorkspace?.id && (
-                <MaterialCommunityIcons
-                  name="check"
-                  size={18}
-                  color={w.type === 'negocio' ? colors.secondary : colors.primary}
+          {workspaces.map((w) =>
+            editingWorkspaceId === w.id ? (
+              <View key={w.id} style={styles.workspaceEditRow}>
+                <TextInput
+                  style={styles.input}
+                  value={draftWorkspaceName}
+                  onChangeText={setDraftWorkspaceName}
+                  placeholder="Nombre del workspace"
+                  placeholderTextColor={colors.textMuted}
+                  autoFocus
                 />
-              )}
-            </Pressable>
-          ))}
+                <Pressable
+                  style={styles.iconButton}
+                  onPress={() => saveWorkspaceName(w.id)}
+                  disabled={!draftWorkspaceName.trim() || renamingWorkspace}
+                >
+                  <MaterialCommunityIcons name="check" size={18} color={colors.primary} />
+                </Pressable>
+                <Pressable style={styles.iconButton} onPress={() => setEditingWorkspaceId(null)}>
+                  <MaterialCommunityIcons name="close" size={18} color={colors.textMuted} />
+                </Pressable>
+              </View>
+            ) : (
+              <View key={w.id} style={styles.workspaceRow}>
+                <Pressable style={styles.workspaceRowMain} onPress={() => switchWorkspace(w.id)}>
+                  <MaterialCommunityIcons
+                    name={w.type === 'negocio' ? 'store' : 'account'}
+                    size={20}
+                    color={
+                      w.id === currentWorkspace?.id
+                        ? w.type === 'negocio'
+                          ? colors.secondary
+                          : colors.primary
+                        : colors.textMuted
+                    }
+                  />
+                  <Text style={styles.workspaceName}>{w.name}</Text>
+                  {w.id === currentWorkspace?.id && (
+                    <MaterialCommunityIcons
+                      name="check"
+                      size={18}
+                      color={w.type === 'negocio' ? colors.secondary : colors.primary}
+                    />
+                  )}
+                </Pressable>
+                <Pressable
+                  style={styles.iconButton}
+                  onPress={() => {
+                    setEditingWorkspaceId(w.id);
+                    setDraftWorkspaceName(w.name);
+                  }}
+                  hitSlop={8}
+                >
+                  <MaterialCommunityIcons name="pencil-outline" size={16} color={colors.textMuted} />
+                </Pressable>
+              </View>
+            )
+          )}
 
           <View style={styles.divider} />
           <Text style={styles.subLabel}>Crear nuevo workspace</Text>
@@ -250,6 +304,16 @@ export default function SettingsScreen() {
                 {items.map((cat) => (
                   <View key={cat.id} style={styles.categoryRow}>
                     <Text style={styles.categoryName}>{cat.name}</Text>
+                    {cat.type === 'gasto' && (
+                      <Pressable
+                        style={[styles.fixedPill, cat.is_fixed && styles.fixedPillActive]}
+                        onPress={() => updateCategoryFixed.mutate({ categoryId: cat.id, isFixed: !cat.is_fixed })}
+                      >
+                        <Text style={[styles.fixedPillText, cat.is_fixed && styles.fixedPillTextActive]}>
+                          {cat.is_fixed ? 'Fijo' : 'Variable'}
+                        </Text>
+                      </Pressable>
+                    )}
                     <Pressable onPress={() => handleDeleteCategory(cat.id, cat.name)} hitSlop={10}>
                       <MaterialCommunityIcons name="trash-can-outline" size={18} color={colors.textMuted} />
                     </Pressable>
@@ -405,8 +469,27 @@ const getStyles = (colors: ThemeColors) => StyleSheet.create({
   workspaceRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 4,
     paddingVertical: 10,
+  },
+  workspaceRowMain: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  workspaceEditRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 6,
+  },
+  iconButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   workspaceName: {
     flex: 1,
@@ -482,12 +565,32 @@ const getStyles = (colors: ThemeColors) => StyleSheet.create({
   categoryRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: 10,
     paddingVertical: 8,
   },
   categoryName: {
+    flex: 1,
     fontSize: 14,
     color: colors.text,
+  },
+  fixedPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  fixedPillActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  fixedPillText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: colors.textMuted,
+  },
+  fixedPillTextActive: {
+    color: '#fff',
   },
   logoutButton: {
     flexDirection: 'row',

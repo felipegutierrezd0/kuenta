@@ -65,7 +65,11 @@ export default function DashboardScreen() {
           </View>
         )}
 
-        <AccountBalanceRow accounts={accountBalances.data} />
+        <AccountBalanceRow
+          accounts={accountBalances.data}
+          sinCuentaBalance={accountBalances.sinCuentaBalance}
+          total={accountBalances.total}
+        />
 
         <RecurringDueBanner recurring={recurringQuery.data ?? []} workspaceId={currentWorkspace?.id} />
 

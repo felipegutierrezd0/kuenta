@@ -89,14 +89,17 @@ export const mockStore = {
     return workspace.id;
   },
 
+  renameWorkspace(workspaceId: string, name: string) {
+    workspaces = workspaces.map((w) => (w.id === workspaceId ? { ...w, name } : w));
+  },
+
   getCategories(workspaceId: string, type?: EntryType): Category[] {
     return categories
       .filter((c) => c.workspace_id === workspaceId && (!type || c.type === type))
       .sort((a, b) => a.name.localeCompare(b.name));
   },
 
-  addCategory(workspaceId: string, name: string, type: EntryType): Category {
-    const color = type === 'ingreso' ? '#16a34a' : type === 'gasto' ? '#dc2626' : '#2563eb';
+  addCategory(workspaceId: string, name: string, type: EntryType, color: string): Category {
     const category: Category = {
       id: nextId(`cat-${workspaceId}`),
       workspace_id: workspaceId,
@@ -104,6 +107,7 @@ export const mockStore = {
       type,
       icon: 'shape',
       color,
+      is_fixed: false,
       created_at: new Date().toISOString(),
     };
     categories = [...categories, category];
@@ -112,6 +116,10 @@ export const mockStore = {
 
   deleteCategory(categoryId: string) {
     categories = categories.filter((c) => c.id !== categoryId);
+  },
+
+  setCategoryFixed(categoryId: string, isFixed: boolean) {
+    categories = categories.map((c) => (c.id === categoryId ? { ...c, is_fixed: isFixed } : c));
   },
 
   getTransactionsInRange(workspaceId: string, monthStart: string, monthEnd: string, type?: EntryType): Transaction[] {

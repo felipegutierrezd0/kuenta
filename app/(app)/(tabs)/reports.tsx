@@ -119,7 +119,7 @@ export default function ReportsScreen() {
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Gastos fijos vs. variables</Text>
           <Text style={styles.cardHint}>
-            Fijo = categorías con un movimiento recurrente activo (ej. renta, suscripciones). Variable = el resto.
+            Marca cada categoría como fija o variable en Ajustes → Categorías para que este desglose sea exacto.
           </Text>
           {fixedVsVariableQuery.isLoading ? (
             <ActivityIndicator color={colors.primary} style={{ marginVertical: 24 }} />

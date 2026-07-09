@@ -306,17 +306,15 @@ export interface FixedVsVariable {
   variable: number;
 }
 
-// Aproximación honesta a "punto de equilibrio" sin inventar datos de unidad económica que la app
-// no modela: gasto fijo = categorías con un recurrente activo, variable = el resto.
-export function computeFixedVsVariable(ctx: MonthContext, recurring: RecurringTransaction[]): FixedVsVariable {
-  const fixedCategoryIds = new Set(
-    recurring.filter((r) => r.active && r.type === 'gasto').map((r) => r.category_id).filter((id): id is string => !!id)
-  );
+// Fijo/variable se define directamente por categoría (Category.is_fixed, editable en
+// Ajustes → Categorías) en vez de adivinarlo por si hay un recurrente activo: así el usuario
+// decide, y no depende de haber configurado esa categoría como recurrente.
+export function computeFixedVsVariable(ctx: MonthContext): FixedVsVariable {
   let fixed = 0;
   let variable = 0;
   for (const t of ctx.currentMonthTx) {
     if (t.type !== 'gasto') continue;
-    if (t.category_id && fixedCategoryIds.has(t.category_id)) fixed += t.amount;
+    if (t.category?.is_fixed) fixed += t.amount;
     else variable += t.amount;
   }
   return { fixed, variable };

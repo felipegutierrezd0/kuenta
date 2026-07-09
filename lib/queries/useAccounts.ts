@@ -79,23 +79,32 @@ export interface AccountBalance extends Account {
   balance: number;
 }
 
+function netOfTransactions(transactions: { type: string; amount: number }[]) {
+  return transactions.reduce((sum, t) => sum + (t.type === 'gasto' ? -t.amount : t.amount), 0);
+}
+
+// Saldo total real del workspace: suma de todas las cuentas más lo que no está
+// asignado a ninguna cuenta ("Sin cuenta"), para que ningún movimiento se pierda del total.
 export function useAccountBalances(workspaceId: string | undefined) {
   const accountsQuery = useAccounts(workspaceId);
   const transactionsQuery = useAllTransactions(workspaceId);
 
-  const balances = useMemo<AccountBalance[]>(() => {
+  const result = useMemo(() => {
     const accounts = accountsQuery.data ?? [];
     const transactions = transactionsQuery.data ?? [];
-    return accounts.map((account) => {
-      const delta = transactions
-        .filter((t) => t.account_id === account.id)
-        .reduce((sum, t) => sum + (t.type === 'gasto' ? -t.amount : t.amount), 0);
-      return { ...account, balance: account.initial_balance + delta };
-    });
+    const balances: AccountBalance[] = accounts.map((account) => ({
+      ...account,
+      balance: account.initial_balance + netOfTransactions(transactions.filter((t) => t.account_id === account.id)),
+    }));
+    const sinCuentaBalance = netOfTransactions(transactions.filter((t) => !t.account_id));
+    const total = balances.reduce((sum, a) => sum + a.balance, 0) + sinCuentaBalance;
+    return { balances, sinCuentaBalance, total };
   }, [accountsQuery.data, transactionsQuery.data]);
 
   return {
-    data: balances,
+    data: result.balances,
+    sinCuentaBalance: result.sinCuentaBalance,
+    total: result.total,
     isLoading: accountsQuery.isLoading || transactionsQuery.isLoading,
   };
 }

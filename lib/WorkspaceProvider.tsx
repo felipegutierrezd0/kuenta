@@ -16,6 +16,7 @@ interface WorkspaceContextValue {
   loading: boolean;
   switchWorkspace: (workspaceId: string) => Promise<void>;
   createWorkspace: (name: string, type: WorkspaceType) => Promise<void>;
+  renameWorkspace: (workspaceId: string, name: string) => Promise<void>;
 }
 
 const WorkspaceContext = createContext<WorkspaceContextValue | undefined>(undefined);
@@ -77,6 +78,17 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
     if (newId) await switchWorkspace(newId as string);
   }
 
+  async function renameWorkspace(workspaceId: string, name: string) {
+    if (isDemoMode) {
+      mockStore.renameWorkspace(workspaceId, name);
+      await queryClient.invalidateQueries({ queryKey: ['workspaces', session?.user.id] });
+      return;
+    }
+    const { error } = await supabase.from('workspaces').update({ name }).eq('id', workspaceId);
+    if (error) throw error;
+    await queryClient.invalidateQueries({ queryKey: ['workspaces', session?.user.id] });
+  }
+
   const currentWorkspace = workspaces.find((w) => w.id === currentWorkspaceId) ?? workspaces[0] ?? null;
 
   return (
@@ -87,6 +99,7 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
         loading: isLoading || !restored,
         switchWorkspace,
         createWorkspace,
+        renameWorkspace,
       }}
     >
       {children}

@@ -15,11 +15,19 @@ const KIND_ICONS: Record<string, keyof typeof MaterialCommunityIcons.glyphMap> =
   otro: 'wallet-outline',
 };
 
-export function AccountBalanceRow({ accounts }: { accounts: AccountBalance[] }) {
+export function AccountBalanceRow({
+  accounts,
+  sinCuentaBalance,
+  total,
+}: {
+  accounts: AccountBalance[];
+  sinCuentaBalance: number;
+  total: number;
+}) {
   const colors = useColors();
   const styles = useMemo(() => getStyles(colors), [colors]);
 
-  if (accounts.length === 0) {
+  if (accounts.length === 0 && sinCuentaBalance === 0) {
     return (
       <Pressable style={styles.emptyCard} onPress={() => router.push('/(app)/accounts')}>
         <MaterialCommunityIcons name="wallet-plus-outline" size={18} color={colors.primary} />
@@ -29,24 +37,52 @@ export function AccountBalanceRow({ accounts }: { accounts: AccountBalance[] }) 
   }
 
   return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
-      {accounts.map((account) => (
-        <Pressable key={account.id} style={styles.card} onPress={() => router.push('/(app)/accounts')}>
-          <View style={styles.iconWrap}>
-            <MaterialCommunityIcons name={KIND_ICONS[account.kind] ?? 'wallet-outline'} size={16} color={colors.primary} />
-          </View>
-          <Text style={styles.name} numberOfLines={1}>{account.name}</Text>
-          <Text style={[styles.balance, { color: account.balance >= 0 ? colors.text : colors.gasto }]}>
-            {formatCurrency(account.balance)}
-          </Text>
-        </Pressable>
-      ))}
-    </ScrollView>
+    <View>
+      <View style={styles.totalRow}>
+        <Text style={styles.totalLabel}>Saldo total</Text>
+        <Text style={[styles.totalValue, { color: total >= 0 ? colors.text : colors.gasto }]}>
+          {formatCurrency(total)}
+        </Text>
+      </View>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
+        {accounts.map((account) => (
+          <Pressable key={account.id} style={styles.card} onPress={() => router.push('/(app)/accounts')}>
+            <View style={styles.iconWrap}>
+              <MaterialCommunityIcons name={KIND_ICONS[account.kind] ?? 'wallet-outline'} size={16} color={colors.primary} />
+            </View>
+            <Text style={styles.name} numberOfLines={1}>{account.name}</Text>
+            <Text style={[styles.balance, { color: account.balance >= 0 ? colors.text : colors.gasto }]}>
+              {formatCurrency(account.balance)}
+            </Text>
+          </Pressable>
+        ))}
+        {sinCuentaBalance !== 0 && (
+          <Pressable style={styles.card} onPress={() => router.push('/(app)/accounts')}>
+            <View style={styles.iconWrap}>
+              <MaterialCommunityIcons name="help-circle-outline" size={16} color={colors.textMuted} />
+            </View>
+            <Text style={styles.name} numberOfLines={1}>Sin cuenta</Text>
+            <Text style={[styles.balance, { color: sinCuentaBalance >= 0 ? colors.text : colors.gasto }]}>
+              {formatCurrency(sinCuentaBalance)}
+            </Text>
+          </Pressable>
+        )}
+      </ScrollView>
+    </View>
   );
 }
 
 const getStyles = (colors: ThemeColors) =>
   StyleSheet.create({
+    totalRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingHorizontal: 2,
+      marginBottom: 8,
+    },
+    totalLabel: { fontSize: 13, color: colors.textMuted, fontWeight: '600' },
+    totalValue: { fontSize: 16, fontWeight: '700' },
     row: { gap: 10, paddingVertical: 2 },
     card: {
       backgroundColor: colors.card,

@@ -23,6 +23,7 @@ export interface Category {
   type: EntryType;
   icon: string | null;
   color: string | null;
+  is_fixed: boolean;
   created_at: string;
 }
 

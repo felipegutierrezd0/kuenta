@@ -1,15 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
+import { categoryColorForIndex } from '@/lib/categoryColor';
 import { isDemoMode } from '@/lib/config';
 import { mockStore } from '@/lib/mock/store';
 import { supabase } from '@/lib/supabase';
 import { Category, EntryType } from '@/types/database';
-
-const CATEGORY_COLORS: Record<EntryType, string> = {
-  ingreso: '#16a34a',
-  gasto: '#dc2626',
-  ahorro: '#2563eb',
-};
 
 export function useCategories(workspaceId: string | undefined, type?: EntryType) {
   return useQuery({
@@ -30,19 +25,48 @@ export function useAddCategory(workspaceId: string | undefined) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ name, type }: { name: string; type: EntryType }) => {
+    // `existingCountOfType` = cuántas categorías de ese mismo tipo ya existen en el workspace;
+    // determina el color asignado (ver lib/categoryColor.ts) para que nunca se repita.
+    mutationFn: async ({
+      name,
+      type,
+      existingCountOfType,
+    }: {
+      name: string;
+      type: EntryType;
+      existingCountOfType: number;
+    }) => {
       if (!workspaceId) throw new Error('No hay workspace seleccionado');
+      const color = categoryColorForIndex(existingCountOfType);
       if (isDemoMode) {
-        mockStore.addCategory(workspaceId, name, type);
+        mockStore.addCategory(workspaceId, name, type, color);
         return;
       }
       const { error } = await supabase.from('categories').insert({
         workspace_id: workspaceId,
         name,
         type,
-        color: CATEGORY_COLORS[type],
+        color,
         icon: 'shape',
       });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['categories', workspaceId] });
+    },
+  });
+}
+
+export function useUpdateCategoryFixed(workspaceId: string | undefined) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ categoryId, isFixed }: { categoryId: string; isFixed: boolean }) => {
+      if (isDemoMode) {
+        mockStore.setCategoryFixed(categoryId, isFixed);
+        return;
+      }
+      const { error } = await supabase.from('categories').update({ is_fixed: isFixed }).eq('id', categoryId);
       if (error) throw error;
     },
     onSuccess: () => {

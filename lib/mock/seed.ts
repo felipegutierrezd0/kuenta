@@ -1,5 +1,6 @@
 import { addDays, format, getDate, getDaysInMonth, startOfMonth, subDays, subMonths } from 'date-fns';
 
+import { categoryColorForIndex } from '@/lib/categoryColor';
 import { DEMO_USER_ID } from '@/lib/config';
 import {
   Account,
@@ -20,26 +21,38 @@ function nextId(prefix: string) {
   return `${prefix}-${idCounter}`;
 }
 
-export const CATEGORY_DEFS: [string, EntryType, string, string][] = [
-  ['Salario', 'ingreso', 'cash', '#16a34a'],
-  ['Ventas', 'ingreso', 'trending-up', '#16a34a'],
-  ['Otros ingresos', 'ingreso', 'plus-circle', '#16a34a'],
-  ['Comida', 'gasto', 'food', '#dc2626'],
-  ['Transporte', 'gasto', 'car', '#dc2626'],
-  ['Servicios', 'gasto', 'flash', '#dc2626'],
-  ['Renta', 'gasto', 'home', '#dc2626'],
-  ['Otros gastos', 'gasto', 'dots-horizontal', '#dc2626'],
-  ['Ahorro general', 'ahorro', 'piggy-bank', '#2563eb'],
+// El color de cada categoría por defecto se calcula por su posición dentro de su tipo
+// (ver lib/categoryColor.ts) para que nunca se repita en los gráficos de Reportes.
+const typeIndexCounters: Record<EntryType, number> = { ingreso: 0, gasto: 0, ahorro: 0 };
+function nextCategoryColor(type: EntryType): string {
+  const color = categoryColorForIndex(typeIndexCounters[type]);
+  typeIndexCounters[type] += 1;
+  return color;
+}
+
+// Renta y Servicios arrancan marcadas como gasto fijo (caso típico); el usuario puede cambiarlo
+// para cualquier categoría desde Ajustes → Categorías.
+export const CATEGORY_DEFS: [string, EntryType, string, string, boolean][] = [
+  ['Salario', 'ingreso', 'cash', nextCategoryColor('ingreso'), false],
+  ['Ventas', 'ingreso', 'trending-up', nextCategoryColor('ingreso'), false],
+  ['Otros ingresos', 'ingreso', 'plus-circle', nextCategoryColor('ingreso'), false],
+  ['Comida', 'gasto', 'food', nextCategoryColor('gasto'), false],
+  ['Transporte', 'gasto', 'car', nextCategoryColor('gasto'), false],
+  ['Servicios', 'gasto', 'flash', nextCategoryColor('gasto'), true],
+  ['Renta', 'gasto', 'home', nextCategoryColor('gasto'), true],
+  ['Otros gastos', 'gasto', 'dots-horizontal', nextCategoryColor('gasto'), false],
+  ['Ahorro general', 'ahorro', 'piggy-bank', nextCategoryColor('ahorro'), false],
 ];
 
 export function buildDefaultCategories(workspaceId: string): Category[] {
-  return CATEGORY_DEFS.map(([name, type, icon, color]) => ({
+  return CATEGORY_DEFS.map(([name, type, icon, color, isFixed]) => ({
     id: nextId(`cat-${workspaceId}`),
     workspace_id: workspaceId,
     name,
     type,
     icon,
     color,
+    is_fixed: isFixed,
     created_at: new Date().toISOString(),
   }));
 }
