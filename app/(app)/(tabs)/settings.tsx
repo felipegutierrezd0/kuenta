@@ -7,7 +7,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ThemeColors, typeLabels } from '@/constants/theme';
 import { useAuth } from '@/lib/AuthProvider';
 import { exportTransactionsCsv } from '@/lib/export';
-import { useAddCategory, useCategories, useDeleteCategory, useUpdateCategoryFixed } from '@/lib/queries/useCategories';
+import {
+  useAddCategory,
+  useCategories,
+  useDeleteCategory,
+  useUpdateCategory,
+  useUpdateCategoryFixed,
+} from '@/lib/queries/useCategories';
 import { useAllTransactions } from '@/lib/queries/useTransactions';
 import { useColors, useTheme, ThemeMode } from '@/lib/ThemeProvider';
 import { useWorkspace } from '@/lib/WorkspaceProvider';
@@ -52,6 +58,7 @@ export default function SettingsScreen() {
   const addCategory = useAddCategory(currentWorkspace?.id);
   const deleteCategory = useDeleteCategory(currentWorkspace?.id);
   const updateCategoryFixed = useUpdateCategoryFixed(currentWorkspace?.id);
+  const updateCategory = useUpdateCategory(currentWorkspace?.id);
   const { mode, setMode } = useTheme();
   const allTransactionsQuery = useAllTransactions(currentWorkspace?.id);
   const [exporting, setExporting] = useState(false);
@@ -76,6 +83,9 @@ export default function SettingsScreen() {
   const [editingWorkspaceId, setEditingWorkspaceId] = useState<string | null>(null);
   const [draftWorkspaceName, setDraftWorkspaceName] = useState('');
   const [renamingWorkspace, setRenamingWorkspace] = useState(false);
+
+  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
+  const [draftCategoryName, setDraftCategoryName] = useState('');
 
   const [newCategoryName, setNewCategoryName] = useState('');
   const [newCategoryType, setNewCategoryType] = useState<EntryType>('gasto');
@@ -120,6 +130,14 @@ export default function SettingsScreen() {
       { text: 'Cancelar', style: 'cancel' },
       { text: 'Eliminar', style: 'destructive', onPress: () => deleteCategory.mutate(id) },
     ]);
+  }
+
+  function handleSaveCategoryName(id: string) {
+    if (!draftCategoryName.trim()) return;
+    updateCategory.mutate(
+      { categoryId: id, name: draftCategoryName.trim() },
+      { onSuccess: () => setEditingCategoryId(null) }
+    );
   }
 
   return (
@@ -269,24 +287,53 @@ export default function SettingsScreen() {
             return (
               <View key={type} style={styles.categoryGroup}>
                 <Text style={[styles.categoryGroupTitle, { color: colors[type] }]}>{typeLabels[type]}</Text>
-                {items.map((cat) => (
-                  <View key={cat.id} style={styles.categoryRow}>
-                    <Text style={styles.categoryName}>{cat.name}</Text>
-                    {cat.type === 'gasto' && (
+                {items.map((cat) =>
+                  editingCategoryId === cat.id ? (
+                    <View key={cat.id} style={styles.categoryEditRow}>
+                      <TextInput
+                        style={styles.input}
+                        value={draftCategoryName}
+                        onChangeText={setDraftCategoryName}
+                        placeholder="Nombre de la categoría"
+                        placeholderTextColor={colors.textMuted}
+                        autoFocus
+                      />
                       <Pressable
-                        style={[styles.fixedPill, cat.is_fixed && styles.fixedPillActive]}
-                        onPress={() => updateCategoryFixed.mutate({ categoryId: cat.id, isFixed: !cat.is_fixed })}
+                        style={styles.iconButton}
+                        onPress={() => handleSaveCategoryName(cat.id)}
+                        disabled={!draftCategoryName.trim() || updateCategory.isPending}
                       >
-                        <Text style={[styles.fixedPillText, cat.is_fixed && styles.fixedPillTextActive]}>
-                          {cat.is_fixed ? 'Fijo' : 'Variable'}
-                        </Text>
+                        <MaterialCommunityIcons name="check" size={18} color={colors.primary} />
                       </Pressable>
-                    )}
-                    <Pressable onPress={() => handleDeleteCategory(cat.id, cat.name)} hitSlop={10}>
-                      <MaterialCommunityIcons name="trash-can-outline" size={18} color={colors.textMuted} />
-                    </Pressable>
-                  </View>
-                ))}
+                      <Pressable style={styles.iconButton} onPress={() => setEditingCategoryId(null)}>
+                        <MaterialCommunityIcons name="close" size={18} color={colors.textMuted} />
+                      </Pressable>
+                    </View>
+                  ) : (
+                    <View key={cat.id} style={styles.categoryRow}>
+                      <Text style={styles.categoryName}>{cat.name}</Text>
+                      {cat.type === 'gasto' && (
+                        <Pressable
+                          style={[styles.fixedPill, cat.is_fixed && styles.fixedPillActive]}
+                          onPress={() => updateCategoryFixed.mutate({ categoryId: cat.id, isFixed: !cat.is_fixed })}
+                        >
+                          <Text style={[styles.fixedPillText, cat.is_fixed && styles.fixedPillTextActive]}>
+                            {cat.is_fixed ? 'Fijo' : 'Variable'}
+                          </Text>
+                        </Pressable>
+                      )}
+                      <Pressable
+                        onPress={() => { setEditingCategoryId(cat.id); setDraftCategoryName(cat.name); }}
+                        hitSlop={10}
+                      >
+                        <MaterialCommunityIcons name="pencil-outline" size={16} color={colors.textMuted} />
+                      </Pressable>
+                      <Pressable onPress={() => handleDeleteCategory(cat.id, cat.name)} hitSlop={10}>
+                        <MaterialCommunityIcons name="trash-can-outline" size={18} color={colors.textMuted} />
+                      </Pressable>
+                    </View>
+                  )
+                )}
               </View>
             );
           })}
@@ -468,6 +515,12 @@ const getStyles = (colors: ThemeColors) => StyleSheet.create({
     alignItems: 'center',
     gap: 10,
     paddingVertical: 8,
+  },
+  categoryEditRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 6,
   },
   categoryName: {
     flex: 1,

@@ -15,7 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemeColors } from '@/constants/theme';
 import { answerQuestion, FALLBACK_MESSAGE } from '@/lib/chat/answerQuestion';
-import { useFinancialData } from '@/lib/queries/useFinancialData';
+import { useAllTransactions } from '@/lib/queries/useTransactions';
 import { useColors } from '@/lib/ThemeProvider';
 import { useWorkspace } from '@/lib/WorkspaceProvider';
 
@@ -27,6 +27,7 @@ interface ChatMessage {
 
 const SUGGESTED_QUESTIONS = [
   '¿En qué gasté más este mes?',
+  '¿Cómo van mis gastos este año?',
   '¿Cuánto he ahorrado?',
   '¿Cuánto puedo invertir?',
 ];
@@ -37,7 +38,8 @@ export default function ChatScreen() {
   const colors = useColors();
   const styles = useMemo(() => getStyles(colors), [colors]);
   const { currentWorkspace } = useWorkspace();
-  const { today, transactionsQuery } = useFinancialData(currentWorkspace?.id);
+  const today = useMemo(() => new Date(), []);
+  const transactionsQuery = useAllTransactions(currentWorkspace?.id);
   const listRef = useRef<FlatList>(null);
 
   const [messages, setMessages] = useState<ChatMessage[]>([

@@ -27,7 +27,7 @@ export default function InsightsScreen() {
   const { currentWorkspace } = useWorkspace();
   const { insights, isLoading, isFetching, refetch } = useInsights(currentWorkspace?.id);
   const { health } = useFinancialHealth(currentWorkspace?.id);
-  const name = displayName(session?.user.email);
+  const name = currentWorkspace?.name ?? displayName(session?.user.email);
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>

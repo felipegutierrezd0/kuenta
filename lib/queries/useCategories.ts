@@ -75,6 +75,24 @@ export function useUpdateCategoryFixed(workspaceId: string | undefined) {
   });
 }
 
+export function useUpdateCategory(workspaceId: string | undefined) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ categoryId, name }: { categoryId: string; name: string }) => {
+      if (isDemoMode) {
+        mockStore.updateCategory(categoryId, name);
+        return;
+      }
+      const { error } = await supabase.from('categories').update({ name }).eq('id', categoryId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['categories', workspaceId] });
+    },
+  });
+}
+
 export function useDeleteCategory(workspaceId: string | undefined) {
   const queryClient = useQueryClient();
 

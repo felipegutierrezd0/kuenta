@@ -42,6 +42,17 @@ let recurringTransactions = [...seedRecurringTransactions];
 let receivables = [...seedReceivables];
 let workspaceInvites: WorkspaceInvite[] = [];
 
+// Las transacciones guardan una copia de `category`/`account` al crearse; si luego se renombra
+// una categoría o se cambia una cuenta, esa copia queda vieja. Al leer, siempre la recalculamos
+// desde los arrays actuales (igual a como Supabase resuelve el join en cada consulta real).
+function hydrateTransaction(t: Transaction): Transaction {
+  return {
+    ...t,
+    category: t.category_id ? categories.find((c) => c.id === t.category_id) ?? null : null,
+    account: t.account_id ? accounts.find((a) => a.id === t.account_id) ?? null : null,
+  };
+}
+
 const DEMO_MEMBERS: WorkspaceMember[] = seedWorkspaces.map((w) => ({
   workspace_id: w.id,
   user_id: DEMO_USER_ID,
@@ -119,6 +130,10 @@ export const mockStore = {
     categories = categories.map((c) => (c.id === categoryId ? { ...c, is_fixed: isFixed } : c));
   },
 
+  updateCategory(categoryId: string, name: string) {
+    categories = categories.map((c) => (c.id === categoryId ? { ...c, name } : c));
+  },
+
   getTransactionsInRange(workspaceId: string, monthStart: string, monthEnd: string, type?: EntryType): Transaction[] {
     return transactions
       .filter(
@@ -128,13 +143,15 @@ export const mockStore = {
           t.occurred_on <= monthEnd &&
           (!type || t.type === type)
       )
-      .sort((a, b) => (b.occurred_on + b.created_at).localeCompare(a.occurred_on + a.created_at));
+      .sort((a, b) => (b.occurred_on + b.created_at).localeCompare(a.occurred_on + a.created_at))
+      .map(hydrateTransaction);
   },
 
   getAllTransactions(workspaceId: string): Transaction[] {
     return transactions
       .filter((t) => t.workspace_id === workspaceId)
-      .sort((a, b) => (b.occurred_on + b.created_at).localeCompare(a.occurred_on + a.created_at));
+      .sort((a, b) => (b.occurred_on + b.created_at).localeCompare(a.occurred_on + a.created_at))
+      .map(hydrateTransaction);
   },
 
   addTransaction(input: NewTransactionInput): Transaction {

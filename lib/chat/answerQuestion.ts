@@ -1,4 +1,4 @@
-import { subMonths } from 'date-fns';
+import { endOfMonth, endOfWeek, endOfYear, format, startOfMonth, startOfWeek, startOfYear, subMonths, subYears } from 'date-fns';
 
 import { formatCurrency } from '@/lib/format';
 import {
@@ -13,7 +13,7 @@ import {
 import { Transaction } from '@/types/database';
 
 export const FALLBACK_MESSAGE =
-  'No estoy segura de cómo responder eso todavía. Puedo ayudarte con preguntas como: "¿En qué gasté más este mes?", "¿Cuánto he gastado en comida?", "¿Cuánto he ahorrado?", "¿Puedo comprar algo de $X?" o "¿Cuánto puedo invertir?".';
+  'No estoy segura de cómo responder eso todavía. Puedo ayudarte con preguntas como: "¿En qué gasté más este mes?", "¿Cuánto he gastado en comida?", "¿Cuánto he gastado en transporte el mes pasado?", "¿Cómo van mis gastos este año?", "¿Cuánto he ahorrado?", "¿Puedo comprar algo de $X?" o "¿Cuánto puedo invertir?".';
 
 const SAFE_MIN_MONTHS = 3;
 
@@ -67,6 +67,56 @@ function detectCategory(normalizedQuestion: string): string | null {
     if (normalizedQuestion.includes(alias)) return categoryName;
   }
   return null;
+}
+
+export interface TimePeriod {
+  start: string; // yyyy-MM-dd
+  end: string;
+  label: string;
+}
+
+// Detecta un período explícito en la pregunta ("el mes pasado", "este año"...). Si no hay
+// ninguno, el resto del código sigue usando el mes actual por defecto (comportamiento previo).
+function parseTimePeriod(normalizedQuestion: string, today: Date): TimePeriod | null {
+  const q = normalizedQuestion;
+  if (/ano pasado/.test(q)) {
+    const lastYear = subYears(today, 1);
+    return { start: format(startOfYear(lastYear), 'yyyy-MM-dd'), end: format(endOfYear(lastYear), 'yyyy-MM-dd'), label: 'el año pasado' };
+  }
+  if (/este ano|presente ano/.test(q)) {
+    return { start: format(startOfYear(today), 'yyyy-MM-dd'), end: format(endOfYear(today), 'yyyy-MM-dd'), label: 'este año' };
+  }
+  if (/mes pasado/.test(q)) {
+    const lastMonth = subMonths(today, 1);
+    return { start: format(startOfMonth(lastMonth), 'yyyy-MM-dd'), end: format(endOfMonth(lastMonth), 'yyyy-MM-dd'), label: 'el mes pasado' };
+  }
+  if (/esta semana/.test(q)) {
+    return {
+      start: format(startOfWeek(today, { weekStartsOn: 1 }), 'yyyy-MM-dd'),
+      end: format(endOfWeek(today, { weekStartsOn: 1 }), 'yyyy-MM-dd'),
+      label: 'esta semana',
+    };
+  }
+  if (/este mes/.test(q)) {
+    return { start: format(startOfMonth(today), 'yyyy-MM-dd'), end: format(endOfMonth(today), 'yyyy-MM-dd'), label: 'este mes' };
+  }
+  return null;
+}
+
+function filterByPeriod(transactions: Transaction[], period: TimePeriod): Transaction[] {
+  return transactions.filter((t) => t.occurred_on >= period.start && t.occurred_on <= period.end);
+}
+
+function answerPeriodSummary(period: TimePeriod, transactions: Transaction[]): string {
+  const periodTx = filterByPeriod(transactions, period);
+  const ingresos = sumByType(periodTx, 'ingreso');
+  const gastos = sumByType(periodTx, 'gasto');
+  const ahorro = sumByType(periodTx, 'ahorro');
+  if (ingresos === 0 && gastos === 0 && ahorro === 0) {
+    return `No tengo movimientos registrados para ${period.label}.`;
+  }
+  const balance = ingresos - gastos - ahorro;
+  return `En ${period.label}: ingresos ${formatCurrency(ingresos)}, gastos ${formatCurrency(gastos)}, ahorro ${formatCurrency(ahorro)}. Balance: ${formatCurrency(balance)}.`;
 }
 
 // "Comida" agrupa supermercado y restaurantes; si un tipo domina el gasto del mes,
@@ -146,20 +196,27 @@ function answerTopCategory(ctx: ReturnType<typeof buildMonthContext>, transactio
   return `Gastaste ${formatCurrency(topTotal)} en ${label} este mes (no tengo datos del mes anterior para comparar).`;
 }
 
-function answerSpendAmount(normalizedQuestion: string, ctx: ReturnType<typeof buildMonthContext>): string {
+function answerSpendAmount(
+  normalizedQuestion: string,
+  ctx: ReturnType<typeof buildMonthContext>,
+  transactions: Transaction[],
+  period: TimePeriod | null
+): string {
   const categoryName = detectCategory(normalizedQuestion);
-  const totals = categoryTotals(ctx.currentMonthTx, 'gasto');
+  const scopedTx = period ? filterByPeriod(transactions, period) : ctx.currentMonthTx;
+  const periodLabel = period ? period.label : 'este mes';
+  const totals = categoryTotals(scopedTx, 'gasto');
 
   if (categoryName) {
     const total = totals.get(categoryName) ?? 0;
-    const label = describeCategorySpending(categoryName, ctx.currentMonthTx);
+    const label = describeCategorySpending(categoryName, scopedTx);
     return total > 0
-      ? `Llevas gastados ${formatCurrency(total)} en ${label} este mes.`
-      : `No registras gastos en ${categoryName.toLowerCase()} este mes.`;
+      ? `Llevas gastados ${formatCurrency(total)} en ${label} ${periodLabel}.`
+      : `No registras gastos en ${categoryName.toLowerCase()} ${periodLabel}.`;
   }
 
   const total = Array.from(totals.values()).reduce((a, b) => a + b, 0);
-  return `Llevas gastados ${formatCurrency(total)} en total este mes.`;
+  return `Llevas gastados ${formatCurrency(total)} en total ${periodLabel}.`;
 }
 
 function answerInvestment(ctx: ReturnType<typeof buildMonthContext>, transactions: Transaction[]): string {
@@ -193,6 +250,7 @@ export function answerQuestion(question: string, transactions: Transaction[], to
   const q = normalize(question);
   const ctx = buildMonthContext(transactions, today);
   const amount = parseAmount(question);
+  const period = parseTimePeriod(q, today);
 
   if (amount && /(puedo comprar|me alcanza|puedo gastar|deberia comprar|debo comprar)/.test(q)) {
     return answerPurchaseCapacity(amount, ctx, transactions);
@@ -210,10 +268,10 @@ export function answerQuestion(question: string, transactions: Transaction[], to
     return answerSavings(ctx, transactions);
   }
   if (/cuanto.*(he gastado|gaste|gasto)/.test(q)) {
-    return answerSpendAmount(q, ctx);
+    return answerSpendAmount(q, ctx, transactions, period);
   }
-  if (/(como voy|como estoy|balance|resumen)/.test(q)) {
-    return answerBalance(ctx);
+  if (/(como voy|como estoy|como van|como vamos|balance|resumen|gastos)/.test(q)) {
+    return period ? answerPeriodSummary(period, transactions) : answerBalance(ctx);
   }
 
   return FALLBACK_MESSAGE;
