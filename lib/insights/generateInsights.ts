@@ -4,12 +4,11 @@ import {
   computeBudgetOverrun,
   computeCashRunway,
   computeCategoryOverrun,
-  computeDebtPriority,
   computeDiscretionarySavings,
   computeGoalsOffTrack,
   computeInvestmentCapacity,
 } from '@/lib/insights/metrics';
-import { Budget, Debt, SavingsGoal, Transaction } from '@/types/database';
+import { Budget, SavingsGoal, Transaction } from '@/types/database';
 
 export type InsightTone = 'danger' | 'warning' | 'success' | 'info';
 
@@ -24,7 +23,6 @@ const MAX_RUNWAY_DAYS_TO_WARN = 90;
 
 export function generateInsights(
   transactions: Transaction[],
-  debts: Debt[],
   today: Date = new Date(),
   budgets: Budget[] = [],
   savingsGoals: SavingsGoal[] = []
@@ -88,26 +86,7 @@ export function generateInsights(
     });
   }
 
-  // 4) Prioridad de pago de deudas (método avalancha: primero la de mayor interés).
-  const debtPriority = computeDebtPriority(debts);
-  if (debtPriority?.second) {
-    const { first, second } = debtPriority;
-    insights.push({
-      id: 'debt-priority',
-      tone: 'info',
-      icon: 'credit-card-outline',
-      message: `Te conviene abonar primero a "${first.name}" (${first.interest_rate}% de interés anual) antes que a "${second.name}" (${second.interest_rate}%) — así pagas menos intereses en total.`,
-    });
-  } else if (debtPriority) {
-    insights.push({
-      id: 'debt-single',
-      tone: 'info',
-      icon: 'credit-card-outline',
-      message: `Tu única deuda registrada, "${debtPriority.first.name}", tiene un interés de ${debtPriority.first.interest_rate}% anual. Págala lo antes posible para reducir lo que pagas en intereses.`,
-    });
-  }
-
-  // 5) Capacidad de inversión, basada en el promedio de meses anteriores completos.
+  // 4) Capacidad de inversión, basada en el promedio de meses anteriores completos.
   const investable = computeInvestmentCapacity(ctx, transactions);
   if (investable != null) {
     insights.push({
@@ -118,7 +97,7 @@ export function generateInsights(
     });
   }
 
-  // 6) Metas de ahorro atrasadas respecto a su fecha objetivo.
+  // 5) Metas de ahorro atrasadas respecto a su fecha objetivo.
   const offTrackGoals = computeGoalsOffTrack(savingsGoals, today);
   for (const goal of offTrackGoals) {
     insights.push({

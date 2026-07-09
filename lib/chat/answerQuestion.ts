@@ -5,16 +5,15 @@ import {
   buildMonthContext,
   categoryTotals,
   categoryTxCounts,
-  computeDebtPriority,
   computeInvestmentCapacity,
   computeLivingCostMonthly,
   monthKey,
   sumByType,
 } from '@/lib/insights/metrics';
-import { Debt, Transaction } from '@/types/database';
+import { Transaction } from '@/types/database';
 
 export const FALLBACK_MESSAGE =
-  'No estoy segura de cómo responder eso todavía. Puedo ayudarte con preguntas como: "¿En qué gasté más este mes?", "¿Cuánto he gastado en comida?", "¿Cuánto he ahorrado?", "¿Puedo comprar algo de $X?", "¿Cuánto puedo invertir?" o "¿Qué deuda debería pagar primero?".';
+  'No estoy segura de cómo responder eso todavía. Puedo ayudarte con preguntas como: "¿En qué gasté más este mes?", "¿Cuánto he gastado en comida?", "¿Cuánto he ahorrado?", "¿Puedo comprar algo de $X?" o "¿Cuánto puedo invertir?".';
 
 const SAFE_MIN_MONTHS = 3;
 
@@ -171,15 +170,6 @@ function answerInvestment(ctx: ReturnType<typeof buildMonthContext>, transaction
   return `Con tu flujo de caja promedio de los últimos meses, podrías destinar unos ${formatCurrency(investable)} a inversión sin afectar tu día a día.`;
 }
 
-function answerDebtPriority(debts: Debt[]): string {
-  const result = computeDebtPriority(debts);
-  if (!result) return 'No tienes deudas registradas todavía. Puedes agregarlas en Ajustes para que te diga cuál te conviene pagar primero.';
-  if (!result.second) {
-    return `Tu única deuda registrada es "${result.first.name}", con ${result.first.interest_rate}% de interés anual. Págala lo antes posible para reducir lo que pagas en intereses.`;
-  }
-  return `Te conviene abonar primero a "${result.first.name}" (${result.first.interest_rate}% anual) antes que a "${result.second.name}" (${result.second.interest_rate}%) — así pagas menos intereses en total.`;
-}
-
 function answerBalance(ctx: ReturnType<typeof buildMonthContext>): string {
   const ingresos = sumByType(ctx.currentMonthTx, 'ingreso');
   const gastos = sumByType(ctx.currentMonthTx, 'gasto');
@@ -199,7 +189,7 @@ function answerSavings(ctx: ReturnType<typeof buildMonthContext>, transactions: 
   return `Este mes has ahorrado ${formatCurrency(thisMonth)}. En total llevas ${formatCurrency(total)} ahorrados.`;
 }
 
-export function answerQuestion(question: string, transactions: Transaction[], debts: Debt[], today: Date = new Date()): string {
+export function answerQuestion(question: string, transactions: Transaction[], today: Date = new Date()): string {
   const q = normalize(question);
   const ctx = buildMonthContext(transactions, today);
   const amount = parseAmount(question);
@@ -212,9 +202,6 @@ export function answerQuestion(question: string, transactions: Transaction[], de
   }
   if (/(cuanto puedo invertir|capacidad de inversion)/.test(q)) {
     return answerInvestment(ctx, transactions);
-  }
-  if (/(que deuda|cual tarjeta|cual deuda).*(pagar|abonar)|prioridad.*deuda/.test(q)) {
-    return answerDebtPriority(debts);
   }
   if (/cuanto.*(gane|ingres|entro)|ingresos/.test(q)) {
     return answerIncome(ctx);

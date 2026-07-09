@@ -7,7 +7,6 @@ import {
   seedAccounts,
   seedBudgets,
   seedCategories,
-  seedDebts,
   seedReceivables,
   seedRecurringTransactions,
   seedSavingsGoals,
@@ -19,7 +18,6 @@ import {
   AccountKind,
   Budget,
   Category,
-  Debt,
   EntryType,
   Receivable,
   ReceivableDirection,
@@ -37,7 +35,6 @@ import {
 let workspaces = [...seedWorkspaces];
 let categories = [...seedCategories];
 let transactions = [...seedTransactions];
-let debts = [...seedDebts];
 let accounts = [...seedAccounts];
 let budgets = [...seedBudgets];
 let savingsGoals = [...seedSavingsGoals];
@@ -163,29 +160,6 @@ export const mockStore = {
 
   deleteTransaction(transactionId: string) {
     transactions = transactions.filter((t) => t.id !== transactionId);
-  },
-
-  getDebts(workspaceId: string): Debt[] {
-    return debts
-      .filter((d) => d.workspace_id === workspaceId)
-      .sort((a, b) => b.interest_rate - a.interest_rate);
-  },
-
-  addDebt(workspaceId: string, name: string, balance: number, interestRate: number): Debt {
-    const debt: Debt = {
-      id: nextId(`debt-${workspaceId}`),
-      workspace_id: workspaceId,
-      name,
-      balance,
-      interest_rate: interestRate,
-      created_at: new Date().toISOString(),
-    };
-    debts = [...debts, debt];
-    return debt;
-  },
-
-  deleteDebt(debtId: string) {
-    debts = debts.filter((d) => d.id !== debtId);
   },
 
   // --- Cuentas ---

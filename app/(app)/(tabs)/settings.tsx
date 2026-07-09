@@ -7,9 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ThemeColors, typeLabels } from '@/constants/theme';
 import { useAuth } from '@/lib/AuthProvider';
 import { exportTransactionsCsv } from '@/lib/export';
-import { formatCurrency } from '@/lib/format';
 import { useAddCategory, useCategories, useDeleteCategory, useUpdateCategoryFixed } from '@/lib/queries/useCategories';
-import { useAddDebt, useDebts, useDeleteDebt } from '@/lib/queries/useDebts';
 import { useAllTransactions } from '@/lib/queries/useTransactions';
 import { useColors, useTheme, ThemeMode } from '@/lib/ThemeProvider';
 import { useWorkspace } from '@/lib/WorkspaceProvider';
@@ -54,9 +52,6 @@ export default function SettingsScreen() {
   const addCategory = useAddCategory(currentWorkspace?.id);
   const deleteCategory = useDeleteCategory(currentWorkspace?.id);
   const updateCategoryFixed = useUpdateCategoryFixed(currentWorkspace?.id);
-  const debtsQuery = useDebts(currentWorkspace?.id);
-  const addDebt = useAddDebt(currentWorkspace?.id);
-  const deleteDebt = useDeleteDebt(currentWorkspace?.id);
   const { mode, setMode } = useTheme();
   const allTransactionsQuery = useAllTransactions(currentWorkspace?.id);
   const [exporting, setExporting] = useState(false);
@@ -84,10 +79,6 @@ export default function SettingsScreen() {
 
   const [newCategoryName, setNewCategoryName] = useState('');
   const [newCategoryType, setNewCategoryType] = useState<EntryType>('gasto');
-
-  const [newDebtName, setNewDebtName] = useState('');
-  const [newDebtBalance, setNewDebtBalance] = useState('');
-  const [newDebtRate, setNewDebtRate] = useState('');
 
   async function handleCreateWorkspace() {
     if (!newWorkspaceName.trim()) return;
@@ -128,29 +119,6 @@ export default function SettingsScreen() {
     Alert.alert('Eliminar categoría', `¿Eliminar "${name}"?`, [
       { text: 'Cancelar', style: 'cancel' },
       { text: 'Eliminar', style: 'destructive', onPress: () => deleteCategory.mutate(id) },
-    ]);
-  }
-
-  function handleAddDebt() {
-    const balance = Number(newDebtBalance.replace(',', '.'));
-    const rate = Number(newDebtRate.replace(',', '.'));
-    if (!newDebtName.trim() || !(balance > 0) || Number.isNaN(rate)) return;
-    addDebt.mutate(
-      { name: newDebtName.trim(), balance, interestRate: rate },
-      {
-        onSuccess: () => {
-          setNewDebtName('');
-          setNewDebtBalance('');
-          setNewDebtRate('');
-        },
-      }
-    );
-  }
-
-  function handleDeleteDebt(id: string, name: string) {
-    Alert.alert('Eliminar deuda', `¿Eliminar "${name}"?`, [
-      { text: 'Cancelar', style: 'cancel' },
-      { text: 'Eliminar', style: 'destructive', onPress: () => deleteDebt.mutate(id) },
     ]);
   }
 
@@ -356,61 +324,6 @@ export default function SettingsScreen() {
           </View>
         </View>
 
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Deudas y tarjetas</Text>
-          <Text style={styles.cardHint}>
-            Regístralas para que la pestaña Consejos te diga cuál te conviene pagar primero.
-          </Text>
-          {(debtsQuery.data ?? []).map((debt) => (
-            <View key={debt.id} style={styles.debtRow}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.categoryName}>{debt.name}</Text>
-                <Text style={styles.debtMeta}>
-                  {formatCurrency(debt.balance)} · {debt.interest_rate}% anual
-                </Text>
-              </View>
-              <Pressable onPress={() => handleDeleteDebt(debt.id, debt.name)} hitSlop={10}>
-                <MaterialCommunityIcons name="trash-can-outline" size={18} color={colors.textMuted} />
-              </Pressable>
-            </View>
-          ))}
-
-          <View style={styles.divider} />
-          <Text style={styles.subLabel}>Agregar deuda</Text>
-          <TextInput
-            style={[styles.input, { marginBottom: 8 }]}
-            placeholder="Nombre (ej. Tarjeta Visa)"
-            placeholderTextColor={colors.textMuted}
-            value={newDebtName}
-            onChangeText={setNewDebtName}
-          />
-          <View style={styles.inlineForm}>
-            <TextInput
-              style={styles.input}
-              placeholder="Saldo actual"
-              placeholderTextColor={colors.textMuted}
-              keyboardType="decimal-pad"
-              value={newDebtBalance}
-              onChangeText={setNewDebtBalance}
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="Tasa % anual"
-              placeholderTextColor={colors.textMuted}
-              keyboardType="decimal-pad"
-              value={newDebtRate}
-              onChangeText={setNewDebtRate}
-            />
-            <Pressable
-              style={[styles.addButton, (!newDebtName.trim() || !newDebtBalance) && styles.addButtonDisabled]}
-              onPress={handleAddDebt}
-              disabled={!newDebtName.trim() || !newDebtBalance}
-            >
-              <MaterialCommunityIcons name="plus" size={20} color="#fff" />
-            </Pressable>
-          </View>
-        </View>
-
         <Pressable style={styles.logoutButton} onPress={signOut}>
           <MaterialCommunityIcons name="logout" size={18} color={colors.gasto} />
           <Text style={styles.logoutText}>Cerrar sesión</Text>
@@ -453,18 +366,6 @@ const getStyles = (colors: ThemeColors) => StyleSheet.create({
     color: colors.textMuted,
     marginBottom: 12,
     marginTop: -6,
-  },
-  debtRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 10,
-    gap: 8,
-  },
-  debtMeta: {
-    fontSize: 12,
-    color: colors.textMuted,
-    marginTop: 2,
   },
   workspaceRow: {
     flexDirection: 'row',

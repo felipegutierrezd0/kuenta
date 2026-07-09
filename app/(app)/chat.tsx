@@ -29,7 +29,6 @@ const SUGGESTED_QUESTIONS = [
   '¿En qué gasté más este mes?',
   '¿Cuánto he ahorrado?',
   '¿Cuánto puedo invertir?',
-  '¿Qué deuda debería pagar primero?',
 ];
 
 let nextId = 1;
@@ -38,7 +37,7 @@ export default function ChatScreen() {
   const colors = useColors();
   const styles = useMemo(() => getStyles(colors), [colors]);
   const { currentWorkspace } = useWorkspace();
-  const { today, transactionsQuery, debtsQuery } = useFinancialData(currentWorkspace?.id);
+  const { today, transactionsQuery } = useFinancialData(currentWorkspace?.id);
   const listRef = useRef<FlatList>(null);
 
   const [messages, setMessages] = useState<ChatMessage[]>([
@@ -49,7 +48,7 @@ export default function ChatScreen() {
     },
   ]);
   const [input, setInput] = useState('');
-  const ready = !transactionsQuery.isLoading && !debtsQuery.isLoading;
+  const ready = !transactionsQuery.isLoading;
 
   function send(text: string) {
     const question = text.trim();
@@ -57,9 +56,7 @@ export default function ChatScreen() {
 
     const userMessage: ChatMessage = { id: `m${nextId++}`, role: 'user', text: question };
 
-    const answer = ready
-      ? answerQuestion(question, transactionsQuery.data ?? [], debtsQuery.data ?? [], today)
-      : FALLBACK_MESSAGE;
+    const answer = ready ? answerQuestion(question, transactionsQuery.data ?? [], today) : FALLBACK_MESSAGE;
     const assistantMessage: ChatMessage = { id: `m${nextId++}`, role: 'assistant', text: answer };
 
     setMessages((prev) => [...prev, userMessage, assistantMessage]);

@@ -1,6 +1,6 @@
 import { addDays, getDate, getDaysInMonth } from 'date-fns';
 
-import { Budget, Debt, EntryType, RecurringTransaction, SavingsGoal, Transaction } from '@/types/database';
+import { Budget, EntryType, RecurringTransaction, SavingsGoal, Transaction } from '@/types/database';
 
 export const ESSENTIAL_CATEGORIES = new Set(['Renta', 'Servicios']);
 export const LIVING_COST_CATEGORIES = new Set(['Renta', 'Servicios', 'Comida', 'Transporte']);
@@ -98,18 +98,6 @@ export function computeInvestmentCapacity(ctx: MonthContext, transactions: Trans
   return avgNet * 0.7;
 }
 
-export interface DebtPriority {
-  sorted: Debt[];
-  first: Debt;
-  second: Debt | null;
-}
-
-export function computeDebtPriority(debts: Debt[]): DebtPriority | null {
-  if (debts.length === 0) return null;
-  const sorted = [...debts].sort((a, b) => b.interest_rate - a.interest_rate);
-  return { sorted, first: sorted[0], second: sorted[1] ?? null };
-}
-
 export interface CategoryOverrun {
   name: string;
   pct: number;
@@ -189,32 +177,25 @@ export interface FinancialHealthScore {
   breakdown: HealthScoreBreakdownItem[];
 }
 
-// Puntaje simple 0-100 que combina cuatro señales ya calculadas en otras partes de este archivo.
+// Puntaje simple 0-100 que combina tres señales ya calculadas en otras partes de este archivo.
 // Es una guía orientativa, no un dictamen financiero: cada componente tiene un tope fijo de puntos
 // para que el usuario pueda ver en qué área está bien y en cuál no.
 export function computeFinancialHealthScore(
   transactions: Transaction[],
-  debts: Debt[],
   budgets: Budget[],
   today: Date = new Date()
 ): FinancialHealthScore {
   const ctx = buildMonthContext(transactions, today);
   const breakdown: HealthScoreBreakdownItem[] = [];
 
-  // Tasa de ahorro (hasta 30 pts): 20% de los ingresos ahorrados ya es el máximo.
+  // Tasa de ahorro (hasta 40 pts): 20% de los ingresos ahorrados ya es el máximo.
   const totalIngresos = sumByType(transactions, 'ingreso');
   const totalAhorro = sumByType(transactions, 'ahorro');
   const savingsRate = totalIngresos > 0 ? totalAhorro / totalIngresos : 0;
-  breakdown.push({ label: 'Tasa de ahorro', points: Math.round(Math.min(1, savingsRate / 0.2) * 30), max: 30 });
+  breakdown.push({ label: 'Tasa de ahorro', points: Math.round(Math.min(1, savingsRate / 0.2) * 40), max: 40 });
 
-  // Deuda vs. ingreso anualizado (hasta 25 pts).
-  const totalDebt = sumBy(debts, (d) => d.balance);
-  const avgMonthlyIncome = totalIngresos / (ctx.pastMonthsCount + 1);
-  const debtRatio = avgMonthlyIncome > 0 ? totalDebt / (avgMonthlyIncome * 12) : totalDebt > 0 ? 1 : 0;
-  breakdown.push({ label: 'Deuda vs. ingresos', points: Math.round(Math.max(0, 1 - Math.min(1, debtRatio)) * 25), max: 25 });
-
-  // Cumplimiento de presupuesto (hasta 25 pts). Sin presupuestos definidos, no penalizamos.
-  let budgetPoints = 25;
+  // Cumplimiento de presupuesto (hasta 35 pts). Sin presupuestos definidos, no penalizamos.
+  let budgetPoints = 35;
   if (budgets.length > 0) {
     const current = categoryTotals(ctx.currentMonthTx, 'gasto');
     const overrunCount = budgets.filter((b) => {
@@ -222,18 +203,18 @@ export function computeFinancialHealthScore(
       const spent = current.get(b.category.name) ?? 0;
       return spent / ctx.elapsedFraction > b.monthly_limit;
     }).length;
-    budgetPoints = Math.round(((budgets.length - overrunCount) / budgets.length) * 25);
+    budgetPoints = Math.round(((budgets.length - overrunCount) / budgets.length) * 35);
   }
-  breakdown.push({ label: 'Cumplimiento de presupuesto', points: budgetPoints, max: 25 });
+  breakdown.push({ label: 'Cumplimiento de presupuesto', points: budgetPoints, max: 35 });
 
-  // Colchón de caja / cash runway (hasta 20 pts).
+  // Colchón de caja / cash runway (hasta 25 pts).
   const { cumulativeBalance, dailyNet } = computeCashRunway(ctx, transactions);
-  let runwayPoints = 20;
+  let runwayPoints = 25;
   if (dailyNet < 0) {
     const daysLeft = cumulativeBalance > 0 ? cumulativeBalance / Math.abs(dailyNet) : 0;
-    runwayPoints = Math.round(Math.max(0, Math.min(1, daysLeft / 90)) * 20);
+    runwayPoints = Math.round(Math.max(0, Math.min(1, daysLeft / 90)) * 25);
   }
-  breakdown.push({ label: 'Colchón de caja', points: runwayPoints, max: 20 });
+  breakdown.push({ label: 'Colchón de caja', points: runwayPoints, max: 25 });
 
   const score = breakdown.reduce((acc, b) => acc + b.points, 0);
   return { score, breakdown };

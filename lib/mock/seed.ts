@@ -6,7 +6,6 @@ import {
   Account,
   Budget,
   Category,
-  Debt,
   EntryType,
   Receivable,
   RecurringTransaction,
@@ -136,14 +135,6 @@ export const seedTransactions: Transaction[] = [
   // Este mes las ventas del negocio bajaron (incomeShock < 1): sirve para mostrar la alerta
   // de flujo de caja en la pestaña Consejos, en contraste con el workspace Personal.
   ...buildTransactions('ws-negocio', 6, 4, 0.25),
-];
-
-export const seedDebts: Debt[] = [
-  { id: 'debt-1', workspace_id: 'ws-personal', name: 'Tarjeta Visa', balance: 1850000, interest_rate: 42.5, created_at: new Date().toISOString() },
-  { id: 'debt-2', workspace_id: 'ws-personal', name: 'Tarjeta Mastercard', balance: 920000, interest_rate: 28.9, created_at: new Date().toISOString() },
-  { id: 'debt-3', workspace_id: 'ws-personal', name: 'Crédito de libre inversión', balance: 3200000, interest_rate: 19.4, created_at: new Date().toISOString() },
-  { id: 'debt-4', workspace_id: 'ws-negocio', name: 'Tarjeta empresarial', balance: 4500000, interest_rate: 34.2, created_at: new Date().toISOString() },
-  { id: 'debt-5', workspace_id: 'ws-negocio', name: 'Préstamo de capital de trabajo', balance: 12000000, interest_rate: 22.1, created_at: new Date().toISOString() },
 ];
 
 export const seedAccounts: Account[] = [

@@ -49,15 +49,6 @@ export interface MonthlySummary {
   balance: number;
 }
 
-export interface Debt {
-  id: string;
-  workspace_id: string;
-  name: string;
-  balance: number;
-  interest_rate: number; // tasa anual en %, ej. 42.5
-  created_at: string;
-}
-
 export type AccountKind = 'efectivo' | 'banco' | 'tarjeta' | 'otro';
 
 export interface Account {

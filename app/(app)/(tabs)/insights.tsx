@@ -37,7 +37,7 @@ export default function InsightsScreen() {
       >
         <Text style={styles.title}>Consejos</Text>
         <Text style={styles.subtitle}>
-          Análisis automático de tus ingresos, gastos y deudas en {currentWorkspace?.name ?? 'este workspace'}.
+          Análisis automático de tus ingresos, gastos y ahorro en {currentWorkspace?.name ?? 'este workspace'}.
         </Text>
 
         {health && <HealthScoreCard health={health} />}
