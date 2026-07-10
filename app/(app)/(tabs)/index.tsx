@@ -9,13 +9,14 @@ import { MonthlySummaryCard } from '@/components/MonthlySummaryCard';
 import { QuickAddButtons } from '@/components/QuickAddButtons';
 import { RecurringDueBanner } from '@/components/RecurringDueBanner';
 import { TransactionListItem } from '@/components/TransactionListItem';
+import { UncategorizedBanner } from '@/components/UncategorizedBanner';
 import { WorkspaceSwitcher } from '@/components/WorkspaceSwitcher';
 import { ThemeColors } from '@/constants/theme';
 import { monthRange } from '@/lib/dateRange';
 import { useAccountBalances } from '@/lib/queries/useAccounts';
 import { useMonthlySummary } from '@/lib/queries/useMonthlySummary';
 import { useRecurringTransactions } from '@/lib/queries/useRecurringTransactions';
-import { useTransactions } from '@/lib/queries/useTransactions';
+import { useAllTransactions, useTransactions } from '@/lib/queries/useTransactions';
 import { useColors } from '@/lib/ThemeProvider';
 import { useWorkspace } from '@/lib/WorkspaceProvider';
 
@@ -30,6 +31,7 @@ export default function DashboardScreen() {
   const transactionsQuery = useTransactions({ workspaceId: currentWorkspace?.id, monthStart: start, monthEnd: end });
   const accountBalances = useAccountBalances(currentWorkspace?.id);
   const recurringQuery = useRecurringTransactions(currentWorkspace?.id);
+  const allTransactionsQuery = useAllTransactions(currentWorkspace?.id);
 
   const recentTransactions = (transactionsQuery.data ?? []).slice(0, 5);
 
@@ -72,6 +74,8 @@ export default function DashboardScreen() {
         />
 
         <RecurringDueBanner recurring={recurringQuery.data ?? []} workspaceId={currentWorkspace?.id} />
+
+        <UncategorizedBanner transactions={allTransactionsQuery.data ?? []} />
 
         <QuickAddButtons />
 

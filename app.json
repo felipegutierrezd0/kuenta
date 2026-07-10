@@ -33,7 +33,14 @@
           "backgroundColor": "#ffffff"
         }
       ],
-      "expo-asset"
+      "expo-asset",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Kuenta usa tus fotos para adjuntar el recibo a un movimiento.",
+          "cameraPermission": "Kuenta usa la cámara para tomar foto de un recibo."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

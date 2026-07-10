@@ -2,7 +2,7 @@ import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { addMonths, format, subMonths } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { useMemo, useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { TransactionListItem } from '@/components/TransactionListItem';
@@ -10,6 +10,7 @@ import { ThemeColors, typeLabels } from '@/constants/theme';
 import { confirmDestructive } from '@/lib/alert';
 import { monthRange } from '@/lib/dateRange';
 import { useDeleteTransaction, useTransactions } from '@/lib/queries/useTransactions';
+import { normalizeText } from '@/lib/text';
 import { useColors } from '@/lib/ThemeProvider';
 import { useWorkspace } from '@/lib/WorkspaceProvider';
 import { EntryType, Transaction } from '@/types/database';
@@ -22,6 +23,7 @@ export default function TransactionsScreen() {
   const { currentWorkspace } = useWorkspace();
   const [month, setMonth] = useState(new Date());
   const [filter, setFilter] = useState<EntryType | 'todos'>('todos');
+  const [search, setSearch] = useState('');
 
   const { start, end } = useMemo(() => monthRange(month), [month]);
   const query = useTransactions({
@@ -31,6 +33,16 @@ export default function TransactionsScreen() {
     type: filter === 'todos' ? undefined : filter,
   });
   const deleteTransaction = useDeleteTransaction(currentWorkspace?.id);
+
+  const filteredData = useMemo(() => {
+    const data = query.data ?? [];
+    const term = normalizeText(search.trim());
+    if (!term) return data;
+    return data.filter((t) => {
+      const haystack = normalizeText(`${t.note ?? ''} ${t.category?.name ?? ''}`);
+      return haystack.includes(term);
+    });
+  }, [query.data, search]);
 
   function confirmDelete(transaction: Transaction) {
     confirmDestructive('Eliminar movimiento', '¿Seguro que quieres eliminarlo?', 'Eliminar', () =>
@@ -64,11 +76,27 @@ export default function TransactionsScreen() {
         ))}
       </View>
 
+      <View style={styles.searchRow}>
+        <MaterialCommunityIcons name="magnify" size={18} color={colors.textMuted} />
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Buscar por nota o categoría..."
+          placeholderTextColor={colors.textMuted}
+          value={search}
+          onChangeText={setSearch}
+        />
+        {search.length > 0 && (
+          <Pressable onPress={() => setSearch('')} hitSlop={8}>
+            <MaterialCommunityIcons name="close-circle" size={18} color={colors.textMuted} />
+          </Pressable>
+        )}
+      </View>
+
       {query.isLoading ? (
         <ActivityIndicator style={{ marginTop: 40 }} color={colors.primary} />
       ) : (
         <FlatList
-          data={query.data ?? []}
+          data={filteredData}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.list}
           renderItem={({ item }) => (
@@ -77,7 +105,11 @@ export default function TransactionsScreen() {
             </Pressable>
           )}
           ItemSeparatorComponent={() => <View style={styles.separator} />}
-          ListEmptyComponent={<Text style={styles.empty}>No hay movimientos en este mes.</Text>}
+          ListEmptyComponent={
+            <Text style={styles.empty}>
+              {search ? 'No hay movimientos que coincidan con tu búsqueda.' : 'No hay movimientos en este mes.'}
+            </Text>
+          }
           refreshing={query.isFetching}
           onRefresh={() => query.refetch()}
         />
@@ -129,6 +161,24 @@ const getStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   filterTextActive: {
     color: '#fff',
+  },
+  searchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginHorizontal: 16,
+    marginBottom: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 14,
+    color: colors.text,
   },
   list: {
     paddingHorizontal: 16,

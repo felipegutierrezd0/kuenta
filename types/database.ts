@@ -38,6 +38,7 @@ export interface Transaction {
   note: string | null;
   occurred_on: string;
   created_at: string;
+  receipt_url: string | null;
   category?: Category | null;
   account?: Account | null;
 }
@@ -107,6 +108,17 @@ export interface Receivable {
   due_date: string | null;
   status: ReceivableStatus;
   created_at: string;
+}
+
+export interface ExpenseSplit {
+  id: string;
+  transaction_id: string;
+  workspace_id: string;
+  participant_name: string;
+  share_amount: number;
+  paid: boolean;
+  created_at: string;
+  transaction?: Transaction | null;
 }
 
 export interface WorkspaceInvite {

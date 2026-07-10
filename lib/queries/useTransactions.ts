@@ -61,6 +61,7 @@ interface NewTransaction {
   accountId?: string | null;
   note: string | null;
   occurredOn: string;
+  receiptUrl?: string | null;
 }
 
 function invalidateWorkspaceData(queryClient: ReturnType<typeof useQueryClient>, workspaceId: string) {
@@ -69,6 +70,7 @@ function invalidateWorkspaceData(queryClient: ReturnType<typeof useQueryClient>,
   queryClient.invalidateQueries({ queryKey: ['category-breakdown', workspaceId] });
   queryClient.invalidateQueries({ queryKey: ['monthly-trend', workspaceId] });
   queryClient.invalidateQueries({ queryKey: ['account-balances', workspaceId] });
+  queryClient.invalidateQueries({ queryKey: ['all-transactions', workspaceId] });
 }
 
 export function useAddTransaction() {
@@ -76,26 +78,50 @@ export function useAddTransaction() {
   const { session } = useAuth();
 
   return useMutation({
-    mutationFn: async (input: NewTransaction) => {
+    mutationFn: async (input: NewTransaction): Promise<Transaction> => {
       if (isDemoMode) {
-        mockStore.addTransaction(input);
-        return;
+        return mockStore.addTransaction(input);
       }
       if (!session) throw new Error('No hay sesión activa');
-      const { error } = await supabase.from('transactions').insert({
-        workspace_id: input.workspaceId,
-        user_id: session.user.id,
-        type: input.type,
-        amount: input.amount,
-        category_id: input.categoryId,
-        account_id: input.accountId ?? null,
-        note: input.note,
-        occurred_on: input.occurredOn,
-      });
+      const { data, error } = await supabase
+        .from('transactions')
+        .insert({
+          workspace_id: input.workspaceId,
+          user_id: session.user.id,
+          type: input.type,
+          amount: input.amount,
+          category_id: input.categoryId,
+          account_id: input.accountId ?? null,
+          note: input.note,
+          occurred_on: input.occurredOn,
+          receipt_url: input.receiptUrl ?? null,
+        })
+        .select('*, category:categories(*), account:accounts(*)')
+        .single();
       if (error) throw error;
+      return data as Transaction;
     },
     onSuccess: (_data, variables) => {
       invalidateWorkspaceData(queryClient, variables.workspaceId);
+    },
+  });
+}
+
+export function useUpdateTransactionCategory(workspaceId: string | undefined) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ transactionId, categoryId }: { transactionId: string; categoryId: string }) => {
+      if (isDemoMode) {
+        mockStore.updateTransactionCategory(transactionId, categoryId);
+        return;
+      }
+      const { error } = await supabase.from('transactions').update({ category_id: categoryId }).eq('id', transactionId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      if (workspaceId) invalidateWorkspaceData(queryClient, workspaceId);
+      queryClient.invalidateQueries({ queryKey: ['all-transactions', workspaceId] });
     },
   });
 }

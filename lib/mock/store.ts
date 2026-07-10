@@ -19,6 +19,7 @@ import {
   Budget,
   Category,
   EntryType,
+  ExpenseSplit,
   Receivable,
   ReceivableDirection,
   ReceivableStatus,
@@ -41,6 +42,7 @@ let savingsGoals = [...seedSavingsGoals];
 let recurringTransactions = [...seedRecurringTransactions];
 let receivables = [...seedReceivables];
 let workspaceInvites: WorkspaceInvite[] = [];
+let expenseSplits: ExpenseSplit[] = [];
 
 // Las transacciones guardan una copia de `category`/`account` al crearse; si luego se renombra
 // una categoría o se cambia una cuenta, esa copia queda vieja. Al leer, siempre la recalculamos
@@ -68,6 +70,7 @@ interface NewTransactionInput {
   accountId?: string | null;
   note: string | null;
   occurredOn: string;
+  receiptUrl?: string | null;
 }
 
 function addMonthsToDate(date: Date, frequency: RecurringFrequency): Date {
@@ -169,6 +172,7 @@ export const mockStore = {
       amount: input.amount,
       note: input.note,
       occurred_on: input.occurredOn,
+      receipt_url: input.receiptUrl ?? null,
       created_at: new Date().toISOString(),
     };
     transactions = [...transactions, transaction];
@@ -177,6 +181,43 @@ export const mockStore = {
 
   deleteTransaction(transactionId: string) {
     transactions = transactions.filter((t) => t.id !== transactionId);
+  },
+
+  updateTransactionCategory(transactionId: string, categoryId: string) {
+    transactions = transactions.map((t) => (t.id === transactionId ? { ...t, category_id: categoryId } : t));
+  },
+
+  // --- Gastos compartidos ---
+  getExpenseSplits(workspaceId: string): ExpenseSplit[] {
+    return expenseSplits
+      .filter((s) => s.workspace_id === workspaceId)
+      .map((s) => ({ ...s, transaction: transactions.find((t) => t.id === s.transaction_id) ?? null }))
+      .sort((a, b) => b.created_at.localeCompare(a.created_at));
+  },
+
+  addExpenseSplits(
+    transactionId: string,
+    workspaceId: string,
+    splits: { participantName: string; shareAmount: number }[]
+  ) {
+    const created = splits.map((s) => ({
+      id: nextId(`split-${workspaceId}`),
+      transaction_id: transactionId,
+      workspace_id: workspaceId,
+      participant_name: s.participantName,
+      share_amount: s.shareAmount,
+      paid: false,
+      created_at: new Date().toISOString(),
+    }));
+    expenseSplits = [...expenseSplits, ...created];
+  },
+
+  updateSplitPaid(splitId: string, paid: boolean) {
+    expenseSplits = expenseSplits.map((s) => (s.id === splitId ? { ...s, paid } : s));
+  },
+
+  deleteExpenseSplit(splitId: string) {
+    expenseSplits = expenseSplits.filter((s) => s.id !== splitId);
   },
 
   // --- Cuentas ---
@@ -378,5 +419,42 @@ export const mockStore = {
     if (!invite) return;
     DEMO_MEMBERS.push({ workspace_id: invite.workspace_id, user_id: DEMO_USER_ID, role: invite.role, created_at: new Date().toISOString() });
     workspaceInvites = workspaceInvites.filter((i) => i.id !== inviteId);
+  },
+
+  // --- Respaldo (lib/backup.ts) ---
+  // Reinserta una fila conservando su id original (para que las referencias entre tablas del
+  // respaldo sigan siendo válidas). Si el id ya existe (reimportar el mismo respaldo dos veces),
+  // se omite en vez de duplicar, igual que el manejo de "unique violation" en modo real.
+  importRow(table: string, row: Record<string, any>) {
+    switch (table) {
+      case 'categories':
+        if (categories.some((c) => c.id === row.id)) return;
+        categories = [...categories, row as Category];
+        return;
+      case 'accounts':
+        if (accounts.some((a) => a.id === row.id)) return;
+        accounts = [...accounts, row as Account];
+        return;
+      case 'budgets':
+        if (budgets.some((b) => b.id === row.id)) return;
+        budgets = [...budgets, row as Budget];
+        return;
+      case 'savings_goals':
+        if (savingsGoals.some((g) => g.id === row.id)) return;
+        savingsGoals = [...savingsGoals, row as SavingsGoal];
+        return;
+      case 'recurring_transactions':
+        if (recurringTransactions.some((r) => r.id === row.id)) return;
+        recurringTransactions = [...recurringTransactions, row as RecurringTransaction];
+        return;
+      case 'receivables':
+        if (receivables.some((r) => r.id === row.id)) return;
+        receivables = [...receivables, row as Receivable];
+        return;
+      case 'transactions':
+        if (transactions.some((t) => t.id === row.id)) return;
+        transactions = [...transactions, row as Transaction];
+        return;
+    }
   },
 };

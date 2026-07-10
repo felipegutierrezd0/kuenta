@@ -4,6 +4,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -16,9 +17,12 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemeColors, typeLabels } from '@/constants/theme';
+import { notify } from '@/lib/alert';
 import { useAccounts } from '@/lib/queries/useAccounts';
 import { useCategories } from '@/lib/queries/useCategories';
+import { useAddExpenseSplits } from '@/lib/queries/useExpenseSplits';
 import { useAddTransaction } from '@/lib/queries/useTransactions';
+import { pickReceiptImage, uploadReceiptImage } from '@/lib/receipts';
 import { useColors } from '@/lib/ThemeProvider';
 import { useWorkspace } from '@/lib/WorkspaceProvider';
 import { EntryType } from '@/types/database';
@@ -37,23 +41,64 @@ export default function AddTransactionScreen() {
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [accountId, setAccountId] = useState<string | null>(null);
   const [note, setNote] = useState('');
+  const [receiptUri, setReceiptUri] = useState<string | null>(null);
+  const [attachingReceipt, setAttachingReceipt] = useState(false);
+  const [sharing, setSharing] = useState(false);
+  const [participants, setParticipants] = useState<{ name: string; amount: string }[]>([]);
 
   const categoriesQuery = useCategories(currentWorkspace?.id, type);
   const accountsQuery = useAccounts(currentWorkspace?.id);
   const addTransaction = useAddTransaction();
+  const addExpenseSplits = useAddExpenseSplits(currentWorkspace?.id);
 
   const activeColor = colors[type];
   const parsedAmount = Number(amount.replace(',', '.'));
-  const canSave = currentWorkspace && parsedAmount > 0 && !addTransaction.isPending;
+  const totalShares = participants.reduce((sum, p) => sum + (Number(p.amount.replace(',', '.')) || 0), 0);
+  const yourShare = parsedAmount - totalShares;
+  const sharesValid = !sharing || totalShares <= parsedAmount;
+  const canSave = currentWorkspace && parsedAmount > 0 && !addTransaction.isPending && !attachingReceipt && sharesValid;
 
   function selectType(next: EntryType) {
     setType(next);
     setCategoryId(null);
+    if (next !== 'gasto') {
+      setSharing(false);
+      setParticipants([]);
+    }
+  }
+
+  async function handleAttachReceipt() {
+    const uri = await pickReceiptImage();
+    if (uri) setReceiptUri(uri);
+  }
+
+  function addParticipant() {
+    setParticipants((prev) => [...prev, { name: '', amount: '' }]);
+  }
+
+  function updateParticipant(index: number, field: 'name' | 'amount', value: string) {
+    setParticipants((prev) => prev.map((p, i) => (i === index ? { ...p, [field]: value } : p)));
+  }
+
+  function removeParticipant(index: number) {
+    setParticipants((prev) => prev.filter((_, i) => i !== index));
   }
 
   async function handleSave() {
     if (!currentWorkspace || !canSave) return;
-    await addTransaction.mutateAsync({
+    let receiptUrl: string | null = null;
+    if (receiptUri) {
+      setAttachingReceipt(true);
+      try {
+        receiptUrl = await uploadReceiptImage(currentWorkspace.id, receiptUri);
+      } catch (e: any) {
+        setAttachingReceipt(false);
+        notify('Error', e.message ?? 'No se pudo subir la foto del recibo');
+        return;
+      }
+      setAttachingReceipt(false);
+    }
+    const created = await addTransaction.mutateAsync({
       workspaceId: currentWorkspace.id,
       type,
       amount: parsedAmount,
@@ -61,7 +106,16 @@ export default function AddTransactionScreen() {
       accountId,
       note: note.trim() || null,
       occurredOn: format(new Date(), 'yyyy-MM-dd'),
+      receiptUrl,
     });
+
+    const validSplits = participants
+      .filter((p) => p.name.trim() && Number(p.amount.replace(',', '.')) > 0)
+      .map((p) => ({ participantName: p.name.trim(), shareAmount: Number(p.amount.replace(',', '.')) }));
+    if (sharing && validSplits.length > 0) {
+      await addExpenseSplits.mutateAsync({ transactionId: created.id, splits: validSplits });
+    }
+
     router.back();
   }
 
@@ -157,6 +211,75 @@ export default function AddTransactionScreen() {
             onChangeText={setNote}
           />
 
+          <Text style={styles.label}>Recibo (opcional)</Text>
+          {receiptUri ? (
+            <View style={styles.receiptRow}>
+              <Image source={{ uri: receiptUri }} style={styles.receiptThumb} />
+              <Pressable style={styles.receiptRemove} onPress={() => setReceiptUri(null)}>
+                <MaterialCommunityIcons name="close-circle" size={22} color={colors.gasto} />
+              </Pressable>
+            </View>
+          ) : (
+            <Pressable style={styles.receiptButton} onPress={handleAttachReceipt}>
+              <MaterialCommunityIcons name="camera-outline" size={18} color={colors.primary} />
+              <Text style={styles.receiptButtonText}>Adjuntar foto del recibo</Text>
+            </Pressable>
+          )}
+
+          {type === 'gasto' && (
+            <>
+              <Pressable
+                style={[styles.shareToggle, sharing && { backgroundColor: activeColor, borderColor: activeColor }]}
+                onPress={() => setSharing((s) => !s)}
+              >
+                <MaterialCommunityIcons
+                  name="account-multiple-outline"
+                  size={18}
+                  color={sharing ? '#fff' : colors.primary}
+                />
+                <Text style={[styles.shareToggleText, sharing && { color: '#fff' }]}>Compartir con otras personas</Text>
+              </Pressable>
+
+              {sharing && (
+                <View style={{ gap: 8 }}>
+                  {participants.map((p, index) => (
+                    <View key={index} style={styles.participantRow}>
+                      <TextInput
+                        style={[styles.input, { flex: 1 }]}
+                        placeholder="Nombre"
+                        placeholderTextColor={colors.textMuted}
+                        value={p.name}
+                        onChangeText={(v) => updateParticipant(index, 'name', v)}
+                      />
+                      <TextInput
+                        style={[styles.input, { flex: 0.6 }]}
+                        placeholder="Monto"
+                        placeholderTextColor={colors.textMuted}
+                        keyboardType="decimal-pad"
+                        value={p.amount}
+                        onChangeText={(v) => updateParticipant(index, 'amount', v)}
+                      />
+                      <Pressable onPress={() => removeParticipant(index)} hitSlop={8}>
+                        <MaterialCommunityIcons name="close-circle" size={20} color={colors.textMuted} />
+                      </Pressable>
+                    </View>
+                  ))}
+                  <Pressable style={styles.addParticipantButton} onPress={addParticipant}>
+                    <MaterialCommunityIcons name="plus" size={16} color={colors.primary} />
+                    <Text style={styles.addParticipantText}>Agregar persona</Text>
+                  </Pressable>
+                  {parsedAmount > 0 && (
+                    <Text style={!sharesValid ? styles.error : styles.hint}>
+                      {sharesValid
+                        ? `Tu parte: ${yourShare.toFixed(2)}`
+                        : 'La suma de las partes no puede superar el monto total.'}
+                    </Text>
+                  )}
+                </View>
+              )}
+            </>
+          )}
+
           {addTransaction.isError && <Text style={styles.error}>No se pudo guardar. Intenta de nuevo.</Text>}
         </ScrollView>
 
@@ -166,7 +289,7 @@ export default function AddTransactionScreen() {
             onPress={handleSave}
             disabled={!canSave}
           >
-            {addTransaction.isPending ? (
+            {addTransaction.isPending || attachingReceipt ? (
               <ActivityIndicator color="#fff" />
             ) : (
               <Text style={styles.saveButtonText}>Guardar</Text>
@@ -278,6 +401,83 @@ const getStyles = (colors: ThemeColors) => StyleSheet.create({
     color: colors.gasto,
     marginTop: 12,
     textAlign: 'center',
+  },
+  receiptButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 12,
+    paddingVertical: 12,
+  },
+  receiptButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.primary,
+  },
+  receiptRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  receiptThumb: {
+    width: 64,
+    height: 64,
+    borderRadius: 10,
+    backgroundColor: colors.card,
+  },
+  receiptRemove: {
+    marginLeft: 10,
+  },
+  shareToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 12,
+    paddingVertical: 12,
+    marginTop: 12,
+  },
+  shareToggleText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.primary,
+  },
+  participantRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 10,
+  },
+  input: {
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+    color: colors.text,
+  },
+  addParticipantButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    alignSelf: 'flex-start',
+    marginTop: 4,
+  },
+  addParticipantText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.primary,
+  },
+  hint: {
+    fontSize: 12,
+    color: colors.textMuted,
+    marginTop: 4,
   },
   footer: {
     padding: 16,

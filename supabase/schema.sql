@@ -215,6 +215,31 @@ alter table transactions add column if not exists account_id uuid references acc
 -- (reemplaza la inferencia anterior basada en si la categoría tenía un recurrente activo).
 alter table categories add column if not exists is_fixed boolean not null default false;
 
+-- Foto de recibo adjunta a un movimiento (opcional).
+alter table transactions add column if not exists receipt_url text;
+
+-- Bucket público para las fotos de recibos. Público porque las URLs no son adivinables
+-- (incluyen el id del workspace y un timestamp), y así no hace falta firmar cada URL al mostrarla.
+insert into storage.buckets (id, name, public)
+values ('receipts', 'receipts', true)
+on conflict (id) do nothing;
+
+create policy "select receipts in own workspaces" on storage.objects
+  for select using (
+    bucket_id = 'receipts'
+    and (storage.foldername(name))[1]::uuid in (select workspace_id from workspace_members where user_id = auth.uid())
+  );
+create policy "insert receipts in own workspaces" on storage.objects
+  for insert with check (
+    bucket_id = 'receipts'
+    and (storage.foldername(name))[1]::uuid in (select workspace_id from workspace_members where user_id = auth.uid())
+  );
+create policy "delete receipts in own workspaces" on storage.objects
+  for delete using (
+    bucket_id = 'receipts'
+    and (storage.foldername(name))[1]::uuid in (select workspace_id from workspace_members where user_id = auth.uid())
+  );
+
 create index if not exists accounts_workspace_idx on accounts (workspace_id);
 create index if not exists transactions_account_idx on transactions (account_id);
 
@@ -391,3 +416,29 @@ end;
 $$;
 
 grant execute on function public.accept_workspace_invite(uuid) to authenticated;
+
+-- Gastos compartidos: divide un movimiento de tipo "gasto" entre otras personas (que no son
+-- necesariamente usuarios de la app). Cada fila es la parte de una persona en un movimiento.
+create table if not exists expense_splits (
+  id uuid primary key default gen_random_uuid(),
+  transaction_id uuid not null references transactions(id) on delete cascade,
+  workspace_id uuid not null references workspaces(id) on delete cascade,
+  participant_name text not null,
+  share_amount numeric(12, 2) not null check (share_amount > 0),
+  paid boolean not null default false,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists expense_splits_workspace_idx on expense_splits (workspace_id);
+create index if not exists expense_splits_transaction_idx on expense_splits (transaction_id);
+
+alter table expense_splits enable row level security;
+
+create policy "select splits in own workspaces" on expense_splits
+  for select using (workspace_id in (select workspace_id from workspace_members where user_id = auth.uid()));
+create policy "insert splits in own workspaces" on expense_splits
+  for insert with check (workspace_id in (select workspace_id from workspace_members where user_id = auth.uid()));
+create policy "update splits in own workspaces" on expense_splits
+  for update using (workspace_id in (select workspace_id from workspace_members where user_id = auth.uid()));
+create policy "delete splits in own workspaces" on expense_splits
+  for delete using (workspace_id in (select workspace_id from workspace_members where user_id = auth.uid()));

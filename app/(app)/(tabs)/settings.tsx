@@ -16,6 +16,7 @@ import {
   useUpdateCategoryFixed,
 } from '@/lib/queries/useCategories';
 import { useAllTransactions } from '@/lib/queries/useTransactions';
+import { usePinLock } from '@/lib/PinLock';
 import { useColors, useTheme, ThemeMode } from '@/lib/ThemeProvider';
 import { useWorkspace } from '@/lib/WorkspaceProvider';
 import { EntryType, WorkspaceType } from '@/types/database';
@@ -61,8 +62,34 @@ export default function SettingsScreen() {
   const updateCategoryFixed = useUpdateCategoryFixed(currentWorkspace?.id);
   const updateCategory = useUpdateCategory(currentWorkspace?.id);
   const { mode, setMode } = useTheme();
+  const { hasPin, setPin, removePin } = usePinLock();
   const allTransactionsQuery = useAllTransactions(currentWorkspace?.id);
   const [exporting, setExporting] = useState(false);
+
+  const [settingPin, setSettingPin] = useState(false);
+  const [newPin, setNewPin] = useState('');
+  const [confirmPin, setConfirmPin] = useState('');
+  const [pinError, setPinError] = useState<string | null>(null);
+
+  async function handleSavePin() {
+    if (!/^\d{4}$/.test(newPin)) {
+      setPinError('El PIN debe tener 4 dígitos.');
+      return;
+    }
+    if (newPin !== confirmPin) {
+      setPinError('Los PIN no coinciden.');
+      return;
+    }
+    await setPin(newPin);
+    setSettingPin(false);
+    setNewPin('');
+    setConfirmPin('');
+    setPinError(null);
+  }
+
+  function handleRemovePin() {
+    confirmDestructive('Quitar PIN', '¿Quitar el bloqueo por PIN de Kuenta?', 'Quitar', () => removePin());
+  }
 
   const isNegocio = currentWorkspace?.type === 'negocio';
 
@@ -261,6 +288,10 @@ export default function SettingsScreen() {
             <Text style={styles.navRowLabel}>Exportar movimientos (CSV)</Text>
             {exporting ? <ActivityIndicator size="small" color={colors.primary} /> : <View style={{ width: 20 }} />}
           </Pressable>
+          <NavRow icon="backup-restore" label="Respaldo (exportar / importar)" onPress={() => router.push('/(app)/backup')} colors={colors} styles={styles} />
+          <NavRow icon="chart-timeline-variant" label="Simulador '¿qué pasaría si?'" onPress={() => router.push('/(app)/whatif')} colors={colors} styles={styles} />
+          <NavRow icon="account-multiple-outline" label="Gastos compartidos" onPress={() => router.push('/(app)/splits')} colors={colors} styles={styles} />
+          <NavRow icon="file-chart-outline" label="Resumen anual para impuestos" onPress={() => router.push('/(app)/tax-summary')} colors={colors} styles={styles} />
 
           <View style={styles.divider} />
           <Text style={styles.subLabel}>Apariencia</Text>
@@ -275,6 +306,66 @@ export default function SettingsScreen() {
               </Pressable>
             ))}
           </View>
+        </View>
+
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Seguridad</Text>
+          {hasPin ? (
+            <>
+              <Text style={styles.cardHint}>Kuenta te pedirá tu PIN cada vez que abras la app.</Text>
+              <View style={styles.typeRow}>
+                <Pressable style={styles.typeChip} onPress={() => setSettingPin(true)}>
+                  <Text style={styles.typeChipText}>Cambiar PIN</Text>
+                </Pressable>
+                <Pressable style={styles.typeChip} onPress={handleRemovePin}>
+                  <Text style={[styles.typeChipText, { color: colors.gasto }]}>Quitar PIN</Text>
+                </Pressable>
+              </View>
+            </>
+          ) : (
+            <Text style={styles.cardHint}>Protege Kuenta con un PIN de 4 dígitos para que solo tú puedas abrirla.</Text>
+          )}
+
+          {(!hasPin || settingPin) && (
+            <>
+              {!hasPin && (
+                <Pressable
+                  style={[styles.addButton, { alignSelf: 'flex-start', paddingHorizontal: 14, width: 'auto', marginBottom: 12 }]}
+                  onPress={() => setSettingPin(true)}
+                >
+                  <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>Activar PIN</Text>
+                </Pressable>
+              )}
+              {settingPin && (
+                <View style={{ gap: 8 }}>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Nuevo PIN (4 dígitos)"
+                    placeholderTextColor={colors.textMuted}
+                    keyboardType="number-pad"
+                    secureTextEntry
+                    maxLength={4}
+                    value={newPin}
+                    onChangeText={setNewPin}
+                  />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Confirma el PIN"
+                    placeholderTextColor={colors.textMuted}
+                    keyboardType="number-pad"
+                    secureTextEntry
+                    maxLength={4}
+                    value={confirmPin}
+                    onChangeText={setConfirmPin}
+                  />
+                  {pinError && <Text style={styles.error}>{pinError}</Text>}
+                  <Pressable style={styles.saveButton} onPress={handleSavePin}>
+                    <Text style={styles.saveButtonText}>Guardar PIN</Text>
+                  </Pressable>
+                </View>
+              )}
+            </>
+          )}
         </View>
 
         <View style={styles.card}>
@@ -498,6 +589,21 @@ const getStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   addButtonDisabled: {
     opacity: 0.5,
+  },
+  error: {
+    color: colors.gasto,
+    fontSize: 12,
+  },
+  saveButton: {
+    backgroundColor: colors.primary,
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  saveButtonText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 14,
   },
   categoryGroup: {
     marginBottom: 8,

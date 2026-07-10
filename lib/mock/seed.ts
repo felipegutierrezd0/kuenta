@@ -84,6 +84,7 @@ function buildTransactions(workspaceId: string, monthsBack: number, scale: numbe
       category_id: category.id,
       category,
       account_id: null,
+      receipt_url: null,
       type,
       amount: Math.round(amount * scale),
       note: note ?? null,
