@@ -36,6 +36,7 @@ export default function AppLayout() {
         <Stack.Screen name="whatif" />
         <Stack.Screen name="splits" />
         <Stack.Screen name="tax-summary" />
+        <Stack.Screen name="settings" />
       </Stack>
     </PinLockProvider>
   );

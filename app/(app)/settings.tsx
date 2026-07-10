@@ -1,13 +1,12 @@
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemeColors, typeLabels } from '@/constants/theme';
 import { useAuth } from '@/lib/AuthProvider';
 import { confirmDestructive, notify } from '@/lib/alert';
-import { exportTransactionsCsv } from '@/lib/export';
 import {
   useAddCategory,
   useCategories,
@@ -15,7 +14,6 @@ import {
   useUpdateCategory,
   useUpdateCategoryFixed,
 } from '@/lib/queries/useCategories';
-import { useAllTransactions } from '@/lib/queries/useTransactions';
 import { usePinLock } from '@/lib/PinLock';
 import { useColors, useTheme, ThemeMode } from '@/lib/ThemeProvider';
 import { useWorkspace } from '@/lib/WorkspaceProvider';
@@ -29,28 +27,6 @@ const APPEARANCE_OPTIONS: { value: ThemeMode; label: string }[] = [
   { value: 'system', label: 'Sistema' },
 ];
 
-function NavRow({
-  icon,
-  label,
-  onPress,
-  colors,
-  styles,
-}: {
-  icon: keyof typeof MaterialCommunityIcons.glyphMap;
-  label: string;
-  onPress: () => void;
-  colors: ThemeColors;
-  styles: ReturnType<typeof getStyles>;
-}) {
-  return (
-    <Pressable style={styles.navRow} onPress={onPress}>
-      <MaterialCommunityIcons name={icon} size={20} color={colors.primary} />
-      <Text style={styles.navRowLabel}>{label}</Text>
-      <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textMuted} />
-    </Pressable>
-  );
-}
-
 export default function SettingsScreen() {
   const colors = useColors();
   const styles = useMemo(() => getStyles(colors), [colors]);
@@ -63,8 +39,6 @@ export default function SettingsScreen() {
   const updateCategory = useUpdateCategory(currentWorkspace?.id);
   const { mode, setMode } = useTheme();
   const { hasPin, setPin, removePin } = usePinLock();
-  const allTransactionsQuery = useAllTransactions(currentWorkspace?.id);
-  const [exporting, setExporting] = useState(false);
 
   const [settingPin, setSettingPin] = useState(false);
   const [newPin, setNewPin] = useState('');
@@ -89,19 +63,6 @@ export default function SettingsScreen() {
 
   function handleRemovePin() {
     confirmDestructive('Quitar PIN', '¿Quitar el bloqueo por PIN de Kuenta?', 'Quitar', () => removePin());
-  }
-
-  const isNegocio = currentWorkspace?.type === 'negocio';
-
-  async function handleExport() {
-    setExporting(true);
-    try {
-      await exportTransactionsCsv(allTransactionsQuery.data ?? []);
-    } catch (e: any) {
-      notify('Error', e.message ?? 'No se pudo exportar');
-    } finally {
-      setExporting(false);
-    }
   }
 
   const [newWorkspaceName, setNewWorkspaceName] = useState('');
@@ -166,10 +127,16 @@ export default function SettingsScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top']}>
-      <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.title}>Ajustes</Text>
+    <SafeAreaView style={styles.safeArea}>
+      <View style={styles.header}>
+        <Pressable onPress={() => router.back()} hitSlop={12}>
+          <MaterialCommunityIcons name="arrow-left" size={24} color={colors.text} />
+        </Pressable>
+        <Text style={styles.headerTitle}>Ajustes</Text>
+        <View style={{ width: 24 }} />
+      </View>
 
+      <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Tus workspaces</Text>
           {workspaces.map((w) =>
@@ -271,30 +238,7 @@ export default function SettingsScreen() {
         </View>
 
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Herramientas</Text>
-          <NavRow icon="bank-outline" label="Cuentas" onPress={() => router.push('/(app)/accounts')} colors={colors} styles={styles} />
-          <NavRow icon="wallet-outline" label="Presupuestos" onPress={() => router.push('/(app)/budgets')} colors={colors} styles={styles} />
-          <NavRow icon="flag-outline" label="Metas de ahorro" onPress={() => router.push('/(app)/goals')} colors={colors} styles={styles} />
-          <NavRow icon="calendar-sync-outline" label="Recurrentes" onPress={() => router.push('/(app)/recurring')} colors={colors} styles={styles} />
-          {isNegocio && (
-            <NavRow icon="handshake-outline" label="Cobros y pagos" onPress={() => router.push('/(app)/receivables')} colors={colors} styles={styles} />
-          )}
-          {isNegocio && (
-            <NavRow icon="account-multiple-outline" label="Miembros" onPress={() => router.push('/(app)/members')} colors={colors} styles={styles} />
-          )}
-
-          <Pressable style={styles.navRow} onPress={handleExport} disabled={exporting}>
-            <MaterialCommunityIcons name="file-export-outline" size={20} color={colors.primary} />
-            <Text style={styles.navRowLabel}>Exportar movimientos (CSV)</Text>
-            {exporting ? <ActivityIndicator size="small" color={colors.primary} /> : <View style={{ width: 20 }} />}
-          </Pressable>
-          <NavRow icon="backup-restore" label="Respaldo (exportar / importar)" onPress={() => router.push('/(app)/backup')} colors={colors} styles={styles} />
-          <NavRow icon="chart-timeline-variant" label="Simulador '¿qué pasaría si?'" onPress={() => router.push('/(app)/whatif')} colors={colors} styles={styles} />
-          <NavRow icon="account-multiple-outline" label="Gastos compartidos" onPress={() => router.push('/(app)/splits')} colors={colors} styles={styles} />
-          <NavRow icon="file-chart-outline" label="Resumen anual para impuestos" onPress={() => router.push('/(app)/tax-summary')} colors={colors} styles={styles} />
-
-          <View style={styles.divider} />
-          <Text style={styles.subLabel}>Apariencia</Text>
+          <Text style={styles.cardTitle}>Apariencia</Text>
           <View style={styles.typeRow}>
             {APPEARANCE_OPTIONS.map((opt) => (
               <Pressable
@@ -474,15 +418,22 @@ const getStyles = (colors: ThemeColors) => StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  headerTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.text,
+  },
   content: {
     padding: 16,
     gap: 16,
     paddingBottom: 40,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: colors.text,
   },
   card: {
     backgroundColor: colors.card,
@@ -661,17 +612,5 @@ const getStyles = (colors: ThemeColors) => StyleSheet.create({
     color: colors.gasto,
     fontSize: 15,
     fontWeight: '600',
-  },
-  navRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingVertical: 12,
-  },
-  navRowLabel: {
-    flex: 1,
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.text,
   },
 });

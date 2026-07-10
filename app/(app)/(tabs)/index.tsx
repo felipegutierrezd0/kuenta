@@ -1,7 +1,9 @@
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { router } from 'expo-router';
 import { useMemo } from 'react';
-import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AccountBalanceRow } from '@/components/AccountBalanceRow';
@@ -57,7 +59,12 @@ export default function DashboardScreen() {
           />
         }
       >
-        <WorkspaceSwitcher />
+        <View style={styles.topRow}>
+          <WorkspaceSwitcher />
+          <Pressable style={styles.settingsButton} onPress={() => router.push('/(app)/settings')} hitSlop={10}>
+            <MaterialCommunityIcons name="cog-outline" size={22} color={colors.text} />
+          </Pressable>
+        </View>
 
         {summaryQuery.data ? (
           <MonthlySummaryCard summary={summaryQuery.data} monthLabel={monthLabel} />
@@ -111,6 +118,21 @@ const getStyles = (colors: ThemeColors) => StyleSheet.create({
     height: 180,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  topRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  settingsButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   section: {
     backgroundColor: colors.card,

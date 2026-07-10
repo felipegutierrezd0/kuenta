@@ -45,10 +45,10 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="settings"
+        name="tools"
         options={{
-          title: 'Ajustes',
-          tabBarIcon: ({ color, size }) => <MaterialCommunityIcons name="cog" color={color} size={size} />,
+          title: 'Herramientas',
+          tabBarIcon: ({ color, size }) => <MaterialCommunityIcons name="toolbox-outline" color={color} size={size} />,
         }}
       />
     </Tabs>
