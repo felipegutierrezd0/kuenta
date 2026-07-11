@@ -1,3 +1,4 @@
+import { Asset } from 'expo-asset';
 import * as FileSystem from 'expo-file-system';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
@@ -5,6 +6,32 @@ import { jsPDF } from 'jspdf';
 import { Platform } from 'react-native';
 
 import { EntryType, Transaction } from '@/types/database';
+
+// Proporción real del archivo (489x600) para no deformar el logo al escalarlo en el PDF.
+const LOGO_ASPECT = 600 / 489;
+const FOOTER_TEXT = 'Elaborado por: AdiSoft. Todos los derechos reservados.';
+
+// Carga el logo (ícono + nombre "KUENTA") como data URI base64, la única forma en que tanto
+// expo-print (HTML en nativo) como jsPDF (en web) pueden incrustar una imagen en el PDF.
+async function loadLogoDataUri(): Promise<string> {
+  const asset = Asset.fromModule(require('@/assets/images/logo-full.png'));
+  await asset.downloadAsync();
+  const uri = asset.localUri ?? asset.uri;
+
+  if (Platform.OS === 'web') {
+    const response = await fetch(uri);
+    const blob = await response.blob();
+    return await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  }
+
+  const base64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
+  return `data:image/png;base64,${base64}`;
+}
 
 export interface CategoryTotal {
   name: string;
@@ -84,7 +111,7 @@ function escapeHtml(value: string): string {
 
 // HTML usado en iOS/Android: expo-print lo renderiza a PDF con su motor nativo (WebView),
 // así que aquí sí podemos maquetar con CSS normal.
-function buildAnnualSummaryHtml(summary: AnnualSummary): string {
+function buildAnnualSummaryHtml(summary: AnnualSummary, logoDataUri: string): string {
   const money = (n: number) => `$${n.toFixed(2)}`;
   const row = (a: string, b: string) => `<tr><td>${escapeHtml(a)}</td><td class="right">${b}</td></tr>`;
   const incomeRows =
@@ -103,6 +130,8 @@ function buildAnnualSummaryHtml(summary: AnnualSummary): string {
   return `<!DOCTYPE html><html><head><meta charset="utf-8" />
 <style>
   body { font-family: -apple-system, Helvetica, Arial, sans-serif; color: #111; padding: 24px; }
+  .header { display: flex; align-items: flex-start; justify-content: space-between; }
+  .header img { width: 90px; height: auto; }
   h1 { font-size: 20px; margin-bottom: 4px; }
   h2 { font-size: 14px; margin-top: 24px; margin-bottom: 8px; }
   p.hint { color: #666; font-size: 11px; }
@@ -110,10 +139,16 @@ function buildAnnualSummaryHtml(summary: AnnualSummary): string {
   td, th { padding: 6px 4px; border-bottom: 1px solid #e5e5e5; text-align: left; }
   .right { text-align: right; }
   .totals td { font-weight: bold; }
+  .footer { margin-top: 32px; text-align: center; color: #999; font-size: 9px; }
 </style></head>
 <body>
-  <h1>Resumen anual ${summary.year}</h1>
-  <p class="hint">Punto de partida para tu declaración de impuestos, no sustituye la asesoría de tu contador.</p>
+  <div class="header">
+    <div>
+      <h1>Resumen anual ${summary.year}</h1>
+      <p class="hint">Punto de partida para tu declaración de impuestos, no sustituye la asesoría de tu contador.</p>
+    </div>
+    <img src="${logoDataUri}" />
+  </div>
   <table class="totals">
     ${row('Total ingresos', money(summary.totalIncome))}
     ${row('Total gastos', money(summary.totalExpense))}
@@ -129,19 +164,26 @@ function buildAnnualSummaryHtml(summary: AnnualSummary): string {
     <tr><th>Mes</th><th class="right">Ingresos</th><th class="right">Gastos</th></tr>
     ${monthlyRows}
   </table>
+  <p class="footer">${FOOTER_TEXT}</p>
 </body></html>`;
 }
 
 // En web, expo-print solo abre el diálogo de impresión del navegador y no acepta el HTML como
 // contenido (ignora la opción `html`), así que ahí generamos el PDF nosotros mismos con jsPDF y
 // lo descargamos como un archivo normal, igual que el resto de exportaciones de la app.
-async function exportAnnualSummaryPdfWeb(summary: AnnualSummary, fileName: string) {
+async function exportAnnualSummaryPdfWeb(summary: AnnualSummary, fileName: string, logoDataUri: string) {
   const doc = new jsPDF();
   const money = (n: number) => `$${n.toFixed(2)}`;
   const left = 14;
   const right = 196;
   const lineHeight = 7;
   const pageHeight = doc.internal.pageSize.getHeight();
+  const pageWidth = doc.internal.pageSize.getWidth();
+
+  const logoWidth = 26;
+  const logoHeight = logoWidth * LOGO_ASPECT;
+  doc.addImage(logoDataUri, 'PNG', pageWidth - 14 - logoWidth, 10, logoWidth, logoHeight);
+
   let y = 20;
 
   function ensureSpace(next = lineHeight) {
@@ -189,6 +231,7 @@ async function exportAnnualSummaryPdfWeb(summary: AnnualSummary, fileName: strin
   doc.text('Punto de partida para tu declaración de impuestos, no sustituye la asesoría de tu contador.', left, y);
   doc.setTextColor(20);
   y += 10;
+  y = Math.max(y, 10 + logoHeight + 6); // no dejar que la tabla de totales quede debajo del logo
 
   doc.setFontSize(11);
   totalsRow('Total ingresos', money(summary.totalIncome));
@@ -221,18 +264,27 @@ async function exportAnnualSummaryPdfWeb(summary: AnnualSummary, fileName: strin
     y += lineHeight;
   }
 
+  const totalPages = doc.getNumberOfPages();
+  for (let i = 1; i <= totalPages; i++) {
+    doc.setPage(i);
+    doc.setFontSize(8);
+    doc.setTextColor(150);
+    doc.text(FOOTER_TEXT, pageWidth / 2, pageHeight - 10, { align: 'center' });
+  }
+
   doc.save(fileName);
 }
 
 export async function exportAnnualSummaryPdf(summary: AnnualSummary) {
   const fileName = `kuenta-resumen-${summary.year}.pdf`;
+  const logoDataUri = await loadLogoDataUri();
 
   if (Platform.OS === 'web') {
-    await exportAnnualSummaryPdfWeb(summary, fileName);
+    await exportAnnualSummaryPdfWeb(summary, fileName, logoDataUri);
     return;
   }
 
-  const html = buildAnnualSummaryHtml(summary);
+  const html = buildAnnualSummaryHtml(summary, logoDataUri);
   const { uri } = await Print.printToFileAsync({ html });
   const fileUri = `${FileSystem.cacheDirectory}${fileName}`;
   await FileSystem.moveAsync({ from: uri, to: fileUri });
