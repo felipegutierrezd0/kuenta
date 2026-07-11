@@ -8,7 +8,7 @@ import { ThemeColors } from '@/constants/theme';
 import { notify } from '@/lib/alert';
 import { formatCurrency } from '@/lib/format';
 import { useAllTransactions } from '@/lib/queries/useTransactions';
-import { computeAnnualSummary, exportAnnualSummaryCsv } from '@/lib/taxSummary';
+import { computeAnnualSummary, exportAnnualSummaryPdf } from '@/lib/taxSummary';
 import { useColors } from '@/lib/ThemeProvider';
 import { useWorkspace } from '@/lib/WorkspaceProvider';
 
@@ -30,7 +30,7 @@ export default function TaxSummaryScreen() {
   async function handleExport() {
     setExporting(true);
     try {
-      await exportAnnualSummaryCsv(summary);
+      await exportAnnualSummaryPdf(summary);
     } catch (e: any) {
       notify('Error', e.message ?? 'No se pudo exportar el resumen.');
     } finally {
@@ -138,8 +138,8 @@ export default function TaxSummaryScreen() {
               <ActivityIndicator color="#fff" />
             ) : (
               <>
-                <MaterialCommunityIcons name="file-export-outline" size={18} color="#fff" />
-                <Text style={styles.exportButtonText}>Exportar resumen (CSV)</Text>
+                <MaterialCommunityIcons name="file-pdf-box" size={18} color="#fff" />
+                <Text style={styles.exportButtonText}>Exportar resumen (PDF)</Text>
               </>
             )}
           </Pressable>
