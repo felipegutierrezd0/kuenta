@@ -30,7 +30,7 @@ import { EntryType } from '@/types/database';
 const TYPES: EntryType[] = ['ingreso', 'gasto', 'ahorro'];
 
 export default function AddTransactionScreen() {
-  const params = useLocalSearchParams<{ type?: string }>();
+  const params = useLocalSearchParams<{ type?: string; accountId?: string; categoryId?: string }>();
   const initialType = TYPES.includes(params.type as EntryType) ? (params.type as EntryType) : 'gasto';
 
   const colors = useColors();
@@ -38,8 +38,8 @@ export default function AddTransactionScreen() {
   const { currentWorkspace } = useWorkspace();
   const [type, setType] = useState<EntryType>(initialType);
   const [amount, setAmount] = useState('');
-  const [categoryId, setCategoryId] = useState<string | null>(null);
-  const [accountId, setAccountId] = useState<string | null>(null);
+  const [categoryId, setCategoryId] = useState<string | null>(params.categoryId ?? null);
+  const [accountId, setAccountId] = useState<string | null>(params.accountId ?? null);
   const [note, setNote] = useState('');
   const [receiptUri, setReceiptUri] = useState<string | null>(null);
   const [attachingReceipt, setAttachingReceipt] = useState(false);

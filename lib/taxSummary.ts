@@ -2,7 +2,6 @@ import { Asset } from 'expo-asset';
 import * as FileSystem from 'expo-file-system';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
-import { jsPDF } from 'jspdf';
 import { Platform } from 'react-native';
 
 import { EntryType, Transaction } from '@/types/database';
@@ -172,6 +171,10 @@ function buildAnnualSummaryHtml(summary: AnnualSummary, logoDataUri: string): st
 // contenido (ignora la opción `html`), así que ahí generamos el PDF nosotros mismos con jsPDF y
 // lo descargamos como un archivo normal, igual que el resto de exportaciones de la app.
 async function exportAnnualSummaryPdfWeb(summary: AnnualSummary, fileName: string, logoDataUri: string) {
+  // jsPDF solo se usa en web y no es compatible con Hermes/React Native (incluso su sola
+  // importación estática rompía el bundle nativo), así que se carga bajo demanda aquí, en una
+  // función que solo se llama desde la rama `Platform.OS === 'web'`.
+  const { jsPDF } = require('jspdf');
   const doc = new jsPDF();
   const money = (n: number) => `$${n.toFixed(2)}`;
   const left = 14;

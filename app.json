@@ -9,7 +9,12 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.adisoft.kuenta",
+      "appleTeamId": "48CX3G6R98",
+      "entitlements": {
+        "com.apple.security.application-groups": ["group.com.adisoft.kuenta"]
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -40,7 +45,8 @@
           "photosPermission": "Kuenta usa tus fotos para adjuntar el recibo a un movimiento.",
           "cameraPermission": "Kuenta usa la cámara para tomar foto de un recibo."
         }
-      ]
+      ],
+      "@bacons/apple-targets"
     ],
     "experiments": {
       "typedRoutes": true

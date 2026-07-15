@@ -1,6 +1,7 @@
 import { Redirect, Stack } from 'expo-router';
 import { ActivityIndicator, View } from 'react-native';
 
+import { WidgetSync } from '@/components/WidgetSync';
 import { useAuth } from '@/lib/AuthProvider';
 import { PinLockProvider } from '@/lib/PinLock';
 import { useColors } from '@/lib/ThemeProvider';
@@ -21,6 +22,7 @@ export default function AppLayout() {
 
   return (
     <PinLockProvider>
+      <WidgetSync />
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="add" options={{ presentation: 'modal' }} />
@@ -37,6 +39,7 @@ export default function AppLayout() {
         <Stack.Screen name="splits" />
         <Stack.Screen name="tax-summary" />
         <Stack.Screen name="settings" />
+        <Stack.Screen name="widget-settings" />
       </Stack>
     </PinLockProvider>
   );

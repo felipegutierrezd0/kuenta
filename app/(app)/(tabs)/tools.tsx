@@ -79,6 +79,7 @@ export default function ToolsScreen() {
           <NavRow icon="chart-timeline-variant" label="Simulador '¿qué pasaría si?'" onPress={() => router.push('/(app)/whatif')} colors={colors} styles={styles} />
           <NavRow icon="account-multiple-outline" label="Gastos compartidos" onPress={() => router.push('/(app)/splits')} colors={colors} styles={styles} />
           <NavRow icon="file-chart-outline" label="Resumen anual para impuestos" onPress={() => router.push('/(app)/tax-summary')} colors={colors} styles={styles} />
+          <NavRow icon="widgets-outline" label="Widget de iPhone" onPress={() => router.push('/(app)/widget-settings')} colors={colors} styles={styles} />
         </View>
       </ScrollView>
     </SafeAreaView>
