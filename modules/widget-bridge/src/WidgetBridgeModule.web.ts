@@ -3,6 +3,9 @@ import { registerWebModule, NativeModule } from 'expo';
 // El widget de iPhone solo existe en iOS; en web estas llamadas son no-ops seguros.
 class WidgetBridgeModule extends NativeModule<{}> {
   setSharedData(_json: string): void {}
+  getSharedDataJson(): string {
+    return 'null';
+  }
   getPendingEntriesJson(): string {
     return '[]';
   }

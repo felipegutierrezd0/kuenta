@@ -17,9 +17,30 @@ enum SharedStore {
       let raw = defaults.data(forKey: dataKey),
       let decoded = try? JSONDecoder().decode(WidgetSharedData.self, from: raw)
     else {
-      return WidgetSharedData(workspaceName: "Kuenta", totalBalance: nil, presets: [])
+      return WidgetSharedData(
+        workspaceName: "Kuenta", totalBalance: nil, presets: [], categories: [],
+        selectedType: nil, selectedCategoryId: nil)
     }
     return decoded
+  }
+
+  // Cambia `selectedType`/`selectedCategoryId`, preservando el resto de los datos que la app
+  // sincronizó (saldo, presets, categorías) — usado por los intents del selector en vivo, que
+  // corren en el proceso del widget sin acceso a esos datos. Pasar type=nil reinicia todo el
+  // selector (botón "cancelar" o después de registrar un movimiento).
+  static func setSelection(type: String?, categoryId: String?) {
+    let data = loadData()
+    let updated = WidgetSharedData(
+      workspaceName: data.workspaceName,
+      totalBalance: data.totalBalance,
+      presets: data.presets,
+      categories: data.categories,
+      selectedType: type,
+      selectedCategoryId: type == nil ? nil : categoryId
+    )
+    if let encoded = try? JSONEncoder().encode(updated) {
+      defaults?.set(encoded, forKey: dataKey)
+    }
   }
 
   static func appendPending(_ entry: PendingEntry) {
@@ -48,10 +69,20 @@ struct WidgetPreset: Codable, Identifiable, Hashable {
   let amount: Double
 }
 
+struct WidgetCategory: Codable, Identifiable, Hashable {
+  let id: String
+  let name: String
+  let type: String  // "gasto" | "ingreso"
+  let recentAmounts: [Double]
+}
+
 struct WidgetSharedData: Codable {
   let workspaceName: String?
   let totalBalance: Double?
   let presets: [WidgetPreset]
+  let categories: [WidgetCategory]
+  let selectedType: String?
+  let selectedCategoryId: String?
 }
 
 struct PendingEntry: Codable {

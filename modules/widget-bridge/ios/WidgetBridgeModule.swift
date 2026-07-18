@@ -16,6 +16,15 @@ public class WidgetBridgeModule: Module {
       UserDefaults(suiteName: appGroupId)?.set(json.data(using: .utf8), forKey: dataKey)
     }
 
+    Function("getSharedDataJson") { () -> String in
+      guard let data = UserDefaults(suiteName: appGroupId)?.data(forKey: dataKey),
+        let json = String(data: data, encoding: .utf8)
+      else {
+        return "null"
+      }
+      return json
+    }
+
     Function("getPendingEntriesJson") { () -> String in
       guard let data = UserDefaults(suiteName: appGroupId)?.data(forKey: pendingKey),
         let json = String(data: data, encoding: .utf8)
